@@ -1,198 +1,221 @@
+# LeafON API
 
-Estrutura de pastas do projeto
+Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra os modulos de usuarios, vasos inteligentes, telemetria, irrigacao e alertas, usando PostgreSQL como banco de dados.
 
-leafon-backend/
-├── src/main/kotlin/com/leafon/
-│   ├── LeafonApplication.kt
-│   │
-│   ├── config/
-│   │   ├── security/
-│   │   │   ├── SecurityConfig.kt
-│   │   │   ├── JwtAuthenticationFilter.kt
-│   │   │   ├── JwtService.kt
-│   │   │   ├── CustomUserDetailsService.kt
-│   │   │   └── AuthenticationEntryPoint.kt
-│   │   ├── mqtt/
-│   │   │   ├── MqttConfig.kt
-│   │   │   ├── MqttTopics.kt
-│   │   │   └── MqttProperties.kt
-│   │   ├── openapi/
-│   │   │   └── OpenApiConfig.kt
-│   │   ├── jackson/
-│   │   │   └── JacksonConfig.kt
-│   │   └── scheduling/
-│   │       └── SchedulingConfig.kt
-│   │
-│   ├── common/
-│   │   ├── exception/
-│   │   │   ├── GlobalExceptionHandler.kt
-│   │   │   ├── BusinessException.kt
-│   │   │   ├── NotFoundException.kt
-│   │   │   ├── ForbiddenException.kt
-│   │   │   └── UnauthorizedException.kt
-│   │   ├── response/
-│   │   │   ├── ApiResponse.kt
-│   │   │   └── PageResponse.kt
-│   │   ├── util/
-│   │   │   ├── DateTimeUtils.kt
-│   │   │   └── ValidationUtils.kt
-│   │   └── enums/
-│   │       ├── AlertStatus.kt
-│   │       ├── AlertType.kt
-│   │       ├── CommandStatus.kt
-│   │       ├── CommandType.kt
-│   │       ├── IrrigationType.kt
-│   │       ├── PumpStatus.kt
-│   │       └── DayOfWeek.kt
-│   │
-│   ├── auth/
-│   │   ├── controller/
-│   │   │   └── AuthController.kt
-│   │   ├── service/
-│   │   │   ├── AuthService.kt
-│   │   │   └── TokenService.kt
-│   │   ├── dto/
-│   │   │   ├── LoginRequest.kt
-│   │   │   ├── RegisterRequest.kt
-│   │   │   └── AuthResponse.kt
-│   │   └── mapper/
-│   │       └── AuthMapper.kt
-│   │
-│   ├── user/
-│   │   ├── controller/
-│   │   │   └── UserController.kt
-│   │   ├── service/
-│   │   │   └── UserService.kt
-│   │   ├── repository/
-│   │   │   └── UserRepository.kt
-│   │   ├── entity/
-│   │   │   └── User.kt
-│   │   ├── dto/
-│   │   │   ├── UserResponse.kt
-│   │   │   └── UpdateUserRequest.kt
-│   │   └── mapper/
-│   │       └── UserMapper.kt
-│   │
-│   ├── smartpot/
-│   │   ├── controller/
-│   │   │   └── SmartPotController.kt
-│   │   ├── service/
-│   │   │   └── SmartPotService.kt
-│   │   ├── repository/
-│   │   │   └── SmartPotRepository.kt
-│   │   ├── entity/
-│   │   │   └── SmartPot.kt
-│   │   ├── dto/
-│   │   │   ├── SmartPotResponse.kt
-│   │   │   ├── SmartPotConfigRequest.kt
-│   │   │   └── SmartPotConfigPatch.kt
-│   │   └── mapper/
-│   │       └── SmartPotMapper.kt
-│   │
-│   ├── telemetry/
-│   │   ├── controller/
-│   │   │   └── TelemetryController.kt
-│   │   ├── service/
-│   │   │   └── TelemetryService.kt
-│   │   ├── repository/
-│   │   │   └── TelemetryReadingRepository.kt
-│   │   ├── entity/
-│   │   │   └── TelemetryReading.kt
-│   │   ├── dto/
-│   │   │   ├── TelemetryPayload.kt
-│   │   │   ├── TelemetryResponse.kt
-│   │   │   └── TelemetryQuery.kt
-│   │   ├── mqtt/
-│   │   │   └── TelemetryMqttListener.kt
-│   │   └── mapper/
-│   │       └── TelemetryMapper.kt
-│   │
-│   ├── irrigation/
-│   │   ├── controller/
-│   │   │   └── IrrigationController.kt
-│   │   ├── service/
-│   │   │   ├── IrrigationService.kt
-│   │   │   ├── RuleEngine.kt
-│   │   │   └── CooldownPolicy.kt
-│   │   ├── repository/
-│   │   │   └── IrrigationEventRepository.kt
-│   │   ├── entity/
-│   │   │   └── IrrigationEvent.kt
-│   │   ├── dto/
-│   │   │   ├── ManualIrrigationRequest.kt
-│   │   │   ├── IrrigationEventResponse.kt
-│   │   │   └── IrrigationQuery.kt
-│   │   ├── mqtt/
-│   │   │   ├── DeviceCommandPublisher.kt
-│   │   │   └── CommandAckListener.kt
-│   │   └── mapper/
-│   │       └── IrrigationMapper.kt
-│   │
-│   ├── routine/
-│   │   ├── controller/
-│   │   │   └── RoutineController.kt
-│   │   ├── service/
-│   │   │   ├── RoutineService.kt
-│   │   │   └── RoutineScheduler.kt
-│   │   ├── repository/
-│   │   │   └── RoutineRepository.kt
-│   │   ├── entity/
-│   │   │   └── Routine.kt
-│   │   ├── dto/
-│   │   │   ├── RoutineCreateRequest.kt
-│   │   │   ├── RoutineResponse.kt
-│   │   │   └── RoutineUpdateRequest.kt
-│   │   └── mapper/
-│   │       └── RoutineMapper.kt
-│   │
-│   ├── alert/
-│   │   ├── controller/
-│   │   │   └── AlertController.kt
-│   │   ├── service/
-│   │   │   └── AlertService.kt
-│   │   ├── repository/
-│   │   │   └── AlertRepository.kt
-│   │   ├── entity/
-│   │   │   └── Alert.kt
-│   │   ├── dto/
-│   │   │   ├── AlertResponse.kt
-│   │   │   └── AlertStatusUpdateRequest.kt
-│   │   └── mapper/
-│   │       └── AlertMapper.kt
-│   │
-│   ├── command/
-│   │   ├── repository/
-│   │   │   └── MqttCommandRepository.kt
-│   │   ├── entity/
-│   │   │   └── MqttCommand.kt
-│   │   └── service/
-│   │       └── CommandService.kt
-│   │
-│   └── prediction/
-│       ├── controller/
-│       │   └── PredictionController.kt
-│       ├── service/
-│       │   ├── PredictionService.kt
-│       │   └── LinearRegressionService.kt
-│       ├── dto/
-│       │   └── PredictionResponse.kt
-│       └── repository/
-│           └── PredictionRepository.kt
-│
-├── src/main/resources/
-│   ├── application.yml
-│   ├── application-dev.yml
-│   ├── application-prod.yml
-│   └── db/migration/
-│       ├── V1__create_users.sql
-│       ├── V2__create_smart_pots.sql
-│       ├── V3__create_telemetry_readings.sql
-│       ├── V4__create_irrigation_events.sql
-│       ├── V5__create_routines.sql
-│       ├── V6__create_alerts.sql
-│       └── V7__create_mqtt_commands.sql
-│
-└── src/test/kotlin/com/leafon/
-├── unit/
-├── integration/
-└── fixture/
+Projeto Kotlin Multiplatform com Compose Multiplatform. O app Leaf.ON centraliza telas de autenticacao, home, perfil e gerenciamento de Smart Pots, incluindo listagem, cadastro, edicao, detalhe, rotinas e alertas.
+
+projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estufas e hortas urbanas.
+
+## Integrates
+- Rafael Ferreira dos Santos
+- Miguel Gomes de Lima Coyado Vieira
+
+## Tecnologias
+
+- Kotlin 2.2.21
+- Spring Boot 4.0.3
+- Java 21
+- Gradle Wrapper 9.3.1
+- Spring Web MVC
+- Spring Data JPA
+- Spring Security
+- Bean Validation
+- PostgreSQL
+- JWT (`jjwt`)
+
+## Estrutura do projeto
+
+```text
+.
+|-- build.gradle.kts
+|-- settings.gradle.kts
+|-- gradlew
+|-- gradlew.bat
+|-- gradle/
+|   `-- wrapper/
+|-- src/
+|   |-- main/
+|   |   |-- kotlin/
+|   |   |   `-- com/
+|   |   |       `-- leafon/
+|   |   |           |-- LeafonApplication.kt
+|   |   |           |-- alert/
+|   |   |           |-- auth/
+|   |   |           |-- common/
+|   |   |           |-- irrigation/
+|   |   |           |-- smartpot/
+|   |   |           |-- telemetry/
+|   |   |           `-- user/
+|   |   `-- resources/
+|   |       `-- application.properties
+|   `-- test/
+|       `-- kotlin/
+|           `-- com/
+|               `-- leafon/
+`-- README.md
+```
+
+### Pacotes principais
+
+- `com.leafon.LeafonApplication.kt`: ponto de entrada da aplicacao Spring Boot.
+- `auth`: estrutura de autenticacao, DTOs, mappers e servicos de token/autenticacao.
+- `user`: CRUD de usuarios, com controller, service, repository, entity, DTOs e mapper.
+- `smartpot`: estrutura para configuracao e persistencia dos vasos inteligentes.
+- `telemetry`: estrutura para leituras de telemetria e integracao MQTT.
+- `irrigation`: regras, eventos e comandos de irrigacao.
+- `alert`: estrutura para alertas gerados pela aplicacao.
+- `common`: configuracoes compartilhadas, tratamento de excecoes e utilitarios.
+
+Dentro dos modulos de dominio, a organizacao segue este padrao:
+
+- `controller`: endpoints HTTP.
+- `service`: regras de negocio.
+- `repository`: acesso ao banco via Spring Data JPA.
+- `entity`: entidades persistidas no banco.
+- `dto`: objetos de entrada e saida da API.
+- `mapper`: conversao entre entidades e DTOs.
+- `mqtt`: publicacao ou leitura de mensagens MQTT, quando aplicavel.
+
+## Requisitos
+
+- JDK 21 instalado.
+- PostgreSQL acessivel pela aplicacao.
+- Variavel de ambiente `SUPABASE_DATABASE_PASSWORD` configurada, conforme usada em `src/main/resources/application.properties`.
+
+O projeto usa Gradle Wrapper, entao nao e necessario instalar o Gradle manualmente.
+
+## Configuracao
+
+As configuracoes principais ficam em:
+
+```text
+src/main/resources/application.properties
+```
+
+Antes de rodar a aplicacao, configure a senha do banco:
+
+Windows PowerShell:
+
+```powershell
+$env:SUPABASE_DATABASE_PASSWORD="sua_senha"
+```
+
+Linux/macOS:
+
+```bash
+export SUPABASE_DATABASE_PASSWORD="sua_senha"
+```
+
+Se for usar um banco local, ajuste as propriedades `spring.datasource.url`, `spring.datasource.username` e `spring.datasource.password` no arquivo `application.properties`.
+
+### Tabela de usuarios
+
+A entidade `User` esta mapeada no projeto para a tabela `users`. O nome `users` e recomendado porque `user` pode ser palavra reservada em alguns bancos SQL.
+
+| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
+| --- | --- | --- | --- | --- |
+| `id` | `UUID?` | `uuid` | Sim | Chave primaria. Pode usar `gen_random_uuid()` como valor padrao. |
+| `email` | `String` | `varchar(255)` | Sim | Deve ser unico. |
+| `name` | `String?` | `varchar(255)` | Nao | Nome opcional do usuario. |
+| `created_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data de criacao preenchida pelo Hibernate. |
+| `updated_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data da ultima atualizacao preenchida pelo Hibernate. |
+
+Exemplo para criar a tabela manualmente no PostgreSQL:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE IF NOT EXISTS users (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    email varchar(255) NOT NULL UNIQUE,
+    name varchar(255),
+    created_at timestamp with time zone,
+    updated_at timestamp with time zone
+);
+```
+
+## Como rodar
+
+No Windows:
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+No Linux/macOS:
+
+```bash
+./gradlew bootRun
+```
+
+Por padrao, a aplicacao sobe em:
+
+```text
+http://localhost:8080
+```
+
+## Comandos uteis
+
+Listar tarefas disponiveis do Gradle:
+
+```powershell
+.\gradlew.bat tasks
+```
+
+Rodar a aplicacao:
+
+```powershell
+.\gradlew.bat bootRun
+```
+
+Rodar os testes:
+
+```powershell
+.\gradlew.bat test
+```
+
+Gerar build completo:
+
+```powershell
+.\gradlew.bat build
+```
+
+Gerar o JAR executavel:
+
+```powershell
+.\gradlew.bat bootJar
+```
+
+Executar o JAR gerado:
+
+```powershell
+java -jar build/libs/leafon-api-0.0.1-SNAPSHOT.jar
+```
+
+Limpar arquivos gerados:
+
+```powershell
+.\gradlew.bat clean
+```
+
+Em Linux/macOS, substitua `.\gradlew.bat` por `./gradlew`.
+
+## Rotas implementadas
+
+Atualmente, o controller de usuarios expoe:
+
+```text
+GET    /users
+GET    /users/{id}
+POST   /users
+PUT    /users/{id}
+DELETE /users/{id}
+```
+
+Os demais pacotes ja existem como base de organizacao do dominio e podem ser evoluidos com seus respectivos controllers, services e repositories.
+
+## Links
+
+- Repositórios do projeto: [Frontend](https://github.com/RafaSantos19/LeafON-KMP)
+- Repositórios do projeto: [Backend](https://github.com/RafaSantos19/LeafON-API)
+- Documentação do Projeto (Parcial): [Link do Docs](https://docs.google.com/document/d/1GGbEGgVE6KhAxyz87omWVD5X1HY0fGU79IRKmRMV-Ec/edit?usp=sharing)

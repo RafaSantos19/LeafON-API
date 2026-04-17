@@ -21,29 +21,15 @@ class User(
     @ColumnDefault("gen_random_uuid()")
     var id: UUID? = null,
 
-    @Column(nullable = true, unique = true)
-    var supabaseUserId: UUID? = null,
-
     @Column(nullable = false, unique = true)
     var email: String,
 
     @Column(nullable = true)
     var name: String? = null,
 
-   /* *
-    @Column(nullable = true)
-    var phone: String? = null,
-
-    @Column(nullable = true)
-    var gender: String? = null,
-   * */
-
     @CreationTimestamp
     var createdAt: OffsetDateTime? = null,
 
     @UpdateTimestamp
     var updatedAt: OffsetDateTime? = null,
-
-    @Column(nullable = true)
-    var lastLoginAt: OffsetDateTime? = null,
 )

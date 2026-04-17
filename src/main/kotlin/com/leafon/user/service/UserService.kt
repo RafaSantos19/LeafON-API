@@ -1,5 +1,7 @@
 package com.leafon.user.service
 
+import com.leafon.common.exception.ConflictException
+import com.leafon.common.exception.NotFoundException
 import com.leafon.user.dto.CreateUserRequest
 import com.leafon.user.dto.UpdateUserRequest
 import com.leafon.user.entity.User
@@ -8,10 +10,15 @@ import org.springframework.stereotype.Service
 import java.util.UUID
 
 @Service
-class UserService (
+class UserService(
     private val userRepository: UserRepository
 ) {
+
     fun create(request: CreateUserRequest): User {
+        if (userRepository.existsByEmail(request.email)) {
+            throw ConflictException("Email already in use")
+        }
+
         val user = User(
             email = request.email,
             name = request.name,
@@ -20,33 +27,42 @@ class UserService (
         return userRepository.save(user)
     }
 
-    fun findById(id: UUID): User? {
-        return userRepository.findById(id).orElse(null)
+    fun findById(id: UUID): User {
+        return userRepository.findById(id)
+            .orElseThrow { NotFoundException("User with id $id not found") }
     }
 
-    fun findBySupabaseUserId(userId: UUID): User? {
-        return userRepository.findBySupabaseUserId(userId)
-    }
-
-    fun findByEmail(email: String): User? {
+    fun findByEmail(email: String): User {
         return userRepository.findByEmail(email)
+            ?: throw NotFoundException("User with email $email not found")
     }
 
-    fun update(id: UUID, request: UpdateUserRequest): User? {
-        val existingUser = userRepository.findById(id).orElse(null) ?: return null
+    fun findAll(): List<User> {
+        return userRepository.findAll()
+    }
 
-        if (request.name != null) {
-            existingUser.name = request.name
+    fun update(id: UUID, request: UpdateUserRequest): User {
+        val existingUser = userRepository.findById(id)
+            .orElseThrow { NotFoundException("User with id $id not found") }
+
+        request.email?.let { newEmail ->
+            if (newEmail != existingUser.email && userRepository.existsByEmail(newEmail)) {
+                throw ConflictException("Email already in use")
+            }
+            existingUser.email = newEmail
         }
 
-        if (request.email != null) {
-            existingUser.email = request.email
+        request.name?.let { newName ->
+            existingUser.name = newName
         }
 
         return userRepository.save(existingUser)
     }
 
     fun delete(id: UUID) {
-        userRepository.deleteById(id)
+        val existingUser = userRepository.findById(id)
+            .orElseThrow { NotFoundException("User with id $id not found") }
+
+        userRepository.delete(existingUser)
     }
 }

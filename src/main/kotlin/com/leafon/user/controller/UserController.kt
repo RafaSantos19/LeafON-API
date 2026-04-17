@@ -7,14 +7,7 @@ import com.leafon.user.entity.User
 import com.leafon.user.service.UserService
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
 @RestController
@@ -22,36 +15,43 @@ import java.util.UUID
 class UserController(
     private val userService: UserService,
 ) {
-    @GetMapping("/{id}")
-    fun findById(@PathVariable id: UUID): ResponseEntity<UserResponse> {
-        val user = userService.findById(id)
-            ?: return ResponseEntity.notFound().build()
 
-        return ResponseEntity.ok(user.toResponse())
+    @GetMapping
+    fun findAll(): List<UserResponse> {
+        return userService.findAll().map { it.toResponse() }
+    }
+
+    @GetMapping("/{id}")
+    fun findById(@PathVariable id: UUID): UserResponse {
+        return userService.findById(id).toResponse()
     }
 
     @PostMapping
-    fun create(@Valid @RequestBody request: CreateUserRequest): ResponseEntity<UserResponse> {
-        val createdUser = userService.create(request)
-        return ResponseEntity.status(HttpStatus.CREATED).body(createdUser.toResponse())
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@Valid @RequestBody request: CreateUserRequest): UserResponse {
+        return userService.create(request).toResponse()
     }
 
     @PutMapping("/{id}")
-    fun update(@PathVariable id: UUID, @Valid @RequestBody request: UpdateUserRequest): ResponseEntity<UserResponse> {
-        val updatedUser = userService.update(id, request)
-            ?: return ResponseEntity.notFound().build()
+    fun update(
+        @PathVariable id: UUID,
+        @Valid @RequestBody request: UpdateUserRequest,
+    ): UserResponse {
+        return userService.update(id, request).toResponse()
+    }
 
-        return ResponseEntity.ok(updatedUser.toResponse())
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(@PathVariable id: UUID) {
+        userService.delete(id)
     }
 
     private fun User.toResponse(): UserResponse =
         UserResponse(
             id = id,
-            supabaseUserId = supabaseUserId,
             email = email,
             name = name,
             createdAt = createdAt,
             updatedAt = updatedAt,
-            lastLoginAt = lastLoginAt,
         )
 }

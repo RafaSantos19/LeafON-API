@@ -8,5 +8,6 @@ data class CreateUserRequest(
     @field:NotBlank
     val email: String,
 
-    val name: String? = null,
+    @field:NotBlank
+    val name: String,
 )
