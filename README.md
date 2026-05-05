@@ -114,21 +114,21 @@ A entidade `User` esta mapeada no projeto para a tabela `users`. O nome `users` 
 
 | Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
 | --- | --- | --- | --- | --- |
-| `id` | `UUID?` | `uuid` | Sim | Chave primaria. Pode usar `gen_random_uuid()` como valor padrao. |
+| `id` | `UUID?` | `uuid` | Sim | Chave primaria. Deve receber o mesmo UUID do claim `sub` do Supabase Auth. |
 | `email` | `String` | `varchar(255)` | Sim | Deve ser unico. |
 | `name` | `String?` | `varchar(255)` | Nao | Nome opcional do usuario. |
+| `phone` | `String?` | `varchar(255)` | Nao | Telefone do usuario. No fluxo atual de criacao ele e enviado no cadastro. |
 | `created_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data de criacao preenchida pelo Hibernate. |
 | `updated_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data da ultima atualizacao preenchida pelo Hibernate. |
 
 Exemplo para criar a tabela manualmente no PostgreSQL:
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE TABLE IF NOT EXISTS users (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id uuid PRIMARY KEY,
     email varchar(255) NOT NULL UNIQUE,
     name varchar(255),
+    phone varchar(255),
     created_at timestamp with time zone,
     updated_at timestamp with time zone
 );
@@ -206,9 +206,12 @@ Atualmente, o controller de usuarios expoe:
 
 ```text
 GET    /users
+GET    /users/me
 GET    /users/{id}
 POST   /users
+PUT    /users/me
 PUT    /users/{id}
+DELETE /users/me
 DELETE /users/{id}
 ```
 

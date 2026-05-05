@@ -12,4 +12,7 @@ data class UpdateUserRequest(
     @field:NotBlank
     @field:Size(min = 2, max = 100)
     val name: String?,
+
+    @field:NotBlank
+    val phone: String?,
 )

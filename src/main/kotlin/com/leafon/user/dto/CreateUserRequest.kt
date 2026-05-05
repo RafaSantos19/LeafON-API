@@ -10,4 +10,7 @@ data class CreateUserRequest(
 
     @field:NotBlank
     val name: String,
+
+    @field:NotBlank
+    val phone: String,
 )
