@@ -21,7 +21,7 @@ projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estu
 - Spring Security
 - Bean Validation
 - PostgreSQL
-- JWT (`jjwt`)
+- OAuth2 Resource Server com JWT
 
 ## Estrutura do projeto
 
@@ -108,6 +108,29 @@ export SUPABASE_DATABASE_PASSWORD="sua_senha"
 
 Se for usar um banco local, ajuste as propriedades `spring.datasource.url`, `spring.datasource.username` e `spring.datasource.password` no arquivo `application.properties`.
 
+Exemplo minimo de configuracao para desenvolvimento:
+
+```properties
+spring.application.name=leafon-api
+
+spring.datasource.url=jdbc:postgresql://localhost:5432/leafon
+spring.datasource.username=postgres
+spring.datasource.password=${SUPABASE_DATABASE_PASSWORD:}
+spring.datasource.driverClassName=org.postgresql.Driver
+
+leafon.security.supabase.jwt.issuer-uri=https://SEU_PROJETO.supabase.co/auth/v1
+leafon.security.supabase.jwt.jwk-set-uri=https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json
+leafon.security.supabase.jwt.audience=authenticated
+leafon.supabase.admin.project-url=https://SEU_PROJETO.supabase.co
+leafon.supabase.admin.service-role-key=${SUPABASE_SERVICE_ROLE_KEY:}
+leafon.supabase.admin.email-confirm=true
+```
+
+Importante:
+
+- Os valores de `issuer-uri`, `jwk-set-uri` e o JWT usado nas requisicoes precisam pertencer ao mesmo projeto Supabase.
+- A tabela `smartpots` precisa usar `uuid` em `id` e `user_id`. Se a tabela existir com `bigint`, os inserts vao falhar.
+
 ### Tabela de usuarios
 
 A entidade `User` esta mapeada no projeto para a tabela `users`. O nome `users` e recomendado porque `user` pode ser palavra reservada em alguns bancos SQL.
@@ -131,6 +154,34 @@ CREATE TABLE IF NOT EXISTS users (
     phone varchar(255),
     created_at timestamp with time zone,
     updated_at timestamp with time zone
+);
+```
+
+### Tabela de smart pots
+
+A entidade `SmartPot` esta mapeada para a tabela `smartpots` e pertence a um usuario autenticado.
+
+| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
+| --- | --- | --- | --- | --- |
+| `id` | `UUID?` | `uuid` | Sim | Chave primaria do vaso. |
+| `user_id` | `UUID?` | `uuid` | Sim | Dono do vaso. Deve referenciar `users(id)`. |
+| `plant_name` | `String?` | `varchar(255)` | Sim | Nome da planta. |
+| `humidity_min` | `Int?` | `integer` | Sim | Valor minimo permitido, entre `0` e `100`. |
+| `device_id` | `String?` | `varchar(255)` | Nao | Identificador do dispositivo. Deve ser unico quando informado. |
+| `created_at` | `Instant?` | `timestamp with time zone` | Sim | Definido na criacao. |
+| `updated_at` | `Instant?` | `timestamp with time zone` | Sim | Atualizado a cada alteracao. |
+
+Exemplo para criar a tabela manualmente no PostgreSQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS smartpots (
+    id uuid PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id),
+    plant_name varchar(255) NOT NULL,
+    humidity_min integer NOT NULL CHECK (humidity_min BETWEEN 0 AND 100),
+    device_id varchar(255) UNIQUE,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL
 );
 ```
 
@@ -202,7 +253,7 @@ Em Linux/macOS, substitua `.\gradlew.bat` por `./gradlew`.
 
 ## Rotas implementadas
 
-Atualmente, o controller de usuarios expoe:
+Atualmente, a API expoe:
 
 ```text
 GET    /users
@@ -213,9 +264,22 @@ PUT    /users/me
 PUT    /users/{id}
 DELETE /users/me
 DELETE /users/{id}
+
+POST   /smart-pots
+GET    /smart-pots
+GET    /smart-pots/{id}
+PUT    /smart-pots/{id}
+DELETE /smart-pots/{id}
 ```
 
-Os demais pacotes ja existem como base de organizacao do dominio e podem ser evoluidos com seus respectivos controllers, services e repositories.
+Observacoes sobre `smart-pots`:
+
+- O frontend nao envia `userId`.
+- O `userId` e extraido do JWT autenticado.
+- Um usuario so pode listar, buscar, atualizar ou deletar os proprios vasos.
+- `deviceId` duplicado retorna `409 Conflict`.
+- Validacoes invalidas retornam `400 Bad Request`.
+- Vaso inexistente ou sem posse do usuario retorna `404 Not Found`.
 
 ## Links
 
