@@ -61,7 +61,7 @@ projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estu
 - `auth`: estrutura de autenticacao, DTOs, mappers e servicos de token/autenticacao.
 - `user`: CRUD de usuarios, com controller, service, repository, entity, DTOs e mapper.
 - `smartpot`: estrutura para configuracao e persistencia dos vasos inteligentes.
-- `telemetry`: estrutura para leituras de telemetria e integracao MQTT.
+- `telemetry`: registro e consulta de leituras de sensores, com validacao de ownership por `SmartPot`.
 - `irrigation`: regras, eventos e comandos de irrigacao.
 - `alert`: estrutura para alertas gerados pela aplicacao.
 - `common`: configuracoes compartilhadas, tratamento de excecoes e utilitarios.
@@ -185,6 +185,37 @@ CREATE TABLE IF NOT EXISTS smartpots (
 );
 ```
 
+### Tabela de telemetria
+
+A entidade `TelemetryReading` esta mapeada para a tabela `telemetry_readings` e cada leitura pertence a um `SmartPot`.
+
+| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
+| --- | --- | --- | --- | --- |
+| `id` | `UUID?` | `uuid` | Sim | Chave primaria da leitura. |
+| `smart_pot_id` | `UUID?` | `uuid` | Sim | Vaso dono da leitura. Deve referenciar `smartpots(id)`. |
+| `soil_humidity` | `Int?` | `integer` | Sim | Umidade do solo entre `0` e `100`. |
+| `temperature` | `Double?` | `double precision` | Sim | Temperatura aceita decimal. |
+| `luminosity` | `Double?` | `double precision` | Sim | Luminosidade aceita decimal. |
+| `read_at` | `Instant?` | `timestamp with time zone` | Sim | Momento em que o sensor realizou a leitura. |
+| `created_at` | `Instant?` | `timestamp with time zone` | Sim | Momento em que a API persistiu o registro. |
+
+Exemplo para criar a tabela manualmente no PostgreSQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS telemetry_readings (
+    id uuid PRIMARY KEY,
+    smart_pot_id uuid NOT NULL REFERENCES smartpots(id),
+    soil_humidity integer NOT NULL CHECK (soil_humidity BETWEEN 0 AND 100),
+    temperature double precision NOT NULL,
+    luminosity double precision NOT NULL,
+    read_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_readings_smart_pot_read_at
+    ON telemetry_readings (smart_pot_id, read_at DESC);
+```
+
 ## Como rodar
 
 No Windows:
@@ -270,6 +301,10 @@ GET    /smart-pots
 GET    /smart-pots/{id}
 PUT    /smart-pots/{id}
 DELETE /smart-pots/{id}
+
+POST   /telemetry
+GET    /telemetry
+GET    /telemetry/latest
 ```
 
 Observacoes sobre `smart-pots`:
@@ -280,6 +315,49 @@ Observacoes sobre `smart-pots`:
 - `deviceId` duplicado retorna `409 Conflict`.
 - Validacoes invalidas retornam `400 Bad Request`.
 - Vaso inexistente ou sem posse do usuario retorna `404 Not Found`.
+
+Observacoes sobre `telemetry`:
+
+- O frontend nao envia `userId`.
+- O `userId` e extraido do JWT autenticado.
+- O `POST /telemetry` recebe `smartPotId` no body de forma temporaria.
+- O usuario autenticado so pode registrar e consultar leituras dos proprios vasos.
+- `GET /telemetry` ordena as leituras por `readAt` em ordem decrescente.
+- `GET /telemetry/latest` retorna apenas a leitura mais recente do vaso informado.
+- `smartPotId` inexistente retorna `404 Not Found`.
+- `smartPotId` de outro usuario retorna `403 Forbidden`.
+- `soilHumidity` fora do intervalo valido retorna `400 Bad Request`.
+
+## Exemplos de telemetria
+
+Exemplo de `POST`:
+
+```bash
+curl -X POST http://localhost:8080/telemetry \
+  -H "Authorization: Bearer SEU_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "smartPotId": "273f9192-d2c1-467d-9855-3f0e502e9f42",
+    "soilHumidity": 67,
+    "temperature": 24.5,
+    "luminosity": 812.3,
+    "readAt": "2026-05-12T14:30:00Z"
+  }'
+```
+
+Exemplo de `GET`:
+
+```bash
+curl -X GET "http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
+Exemplo de `GET /latest`:
+
+```bash
+curl -X GET "http://localhost:8080/telemetry/latest?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
+  -H "Authorization: Bearer SEU_JWT"
+```
 
 ## Links
 
