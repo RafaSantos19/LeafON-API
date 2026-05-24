@@ -1,12 +1,13 @@
 package com.leafon.user.controller
 
 import com.leafon.common.config.SecurityConfig
-import com.leafon.user.mapper.toResponse
 import com.leafon.user.dto.CreateUserRequest
 import com.leafon.user.dto.UpdateUserRequest
 import com.leafon.user.dto.UserResponse
+import com.leafon.user.mapper.toResponse
 import com.leafon.user.service.UserService
 import jakarta.validation.Valid
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
@@ -16,6 +17,7 @@ import java.util.UUID
 class UserController(
     private val userService: UserService,
 ) {
+    private val logger = LoggerFactory.getLogger(UserController::class.java)
 
     @GetMapping
     fun findAll(): List<UserResponse> {
@@ -26,7 +28,18 @@ class UserController(
     fun findCurrentUser(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): UserResponse {
-        return userService.findCurrentUser(uid).toResponse()
+        logger.info("Temporary users/me GET received with authenticatedUid={}", uid)
+
+        val user = userService.findCurrentUser(uid)
+
+        logger.info(
+            "Temporary users/me GET resolved authenticatedUid={} to localUserId={} email={}",
+            uid,
+            user.id,
+            user.email,
+        )
+
+        return user.toResponse()
     }
 
     @GetMapping("/{id}")
@@ -51,7 +64,24 @@ class UserController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: UpdateUserRequest,
     ): UserResponse {
-        return userService.updateCurrentUser(uid, request).toResponse()
+        logger.info(
+            "Temporary users/me PUT received with authenticatedUid={} payload={emailPresent={}, namePresent={}, phonePresent={}}",
+            uid,
+            request.email != null,
+            request.name != null,
+            request.phone != null,
+        )
+
+        val user = userService.updateCurrentUser(uid, request)
+
+        logger.info(
+            "Temporary users/me PUT updated authenticatedUid={} localUserId={} email={}",
+            uid,
+            user.id,
+            user.email,
+        )
+
+        return user.toResponse()
     }
 
     @PutMapping("/{id}")

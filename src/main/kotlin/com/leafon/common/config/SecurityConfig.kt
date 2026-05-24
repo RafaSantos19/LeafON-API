@@ -165,6 +165,14 @@ class SecurityConfig {
                 response: HttpServletResponse,
                 filterChain: FilterChain,
             ) {
+                if (isUsersMeRequest(request)) {
+                    logger.info(
+                        "Temporary security users/me request received " +
+                            "method=${request.method} uri=${request.requestURI} " +
+                            "hasAuthorizationHeader=${!request.getHeader(HttpHeaders.AUTHORIZATION).isNullOrBlank()}",
+                    )
+                }
+
                 val authorization = request.getHeader(HttpHeaders.AUTHORIZATION)
                 request.setAttribute(AUTHORIZATION_ATTRIBUTE, authorization ?: "")
 
@@ -176,7 +184,16 @@ class SecurityConfig {
                         message = "Nenhum header Authorization foi recebido.",
                         warnOnly = true,
                     )
+                    if (isUsersMeRequest(request)) {
+                        logger.info("Temporary security users/me authDebugFilter before chain (missing authorization)")
+                    }
                     filterChain.doFilter(request, response)
+                    if (isUsersMeRequest(request)) {
+                        logger.info(
+                            "Temporary security users/me authDebugFilter after chain " +
+                                "status=${response.status} committed=${response.isCommitted}",
+                        )
+                    }
                     return
                 }
 
@@ -190,7 +207,16 @@ class SecurityConfig {
                         message = "Falha ao extrair Bearer token do header Authorization: ${ex.message ?: "formato invalido"}",
                         exception = ex,
                     )
+                    if (isUsersMeRequest(request)) {
+                        logger.info("Temporary security users/me authDebugFilter before chain (token extraction failure)")
+                    }
                     filterChain.doFilter(request, response)
+                    if (isUsersMeRequest(request)) {
+                        logger.info(
+                            "Temporary security users/me authDebugFilter after chain " +
+                                "status=${response.status} committed=${response.isCommitted}",
+                        )
+                    }
                     return
                 }
 
@@ -202,11 +228,35 @@ class SecurityConfig {
                         message = "O header Authorization foi recebido, mas nenhum token Bearer valido foi extraido.",
                         warnOnly = true,
                     )
+                    if (isUsersMeRequest(request)) {
+                        logger.info("Temporary security users/me authDebugFilter before chain (blank token)")
+                    }
                     filterChain.doFilter(request, response)
+                    if (isUsersMeRequest(request)) {
+                        logger.info(
+                            "Temporary security users/me authDebugFilter after chain " +
+                                "status=${response.status} committed=${response.isCommitted}",
+                        )
+                    }
                     return
                 }
 
+                if (isUsersMeRequest(request)) {
+                    logger.info(
+                        "Temporary security users/me bearer token resolved " +
+                            "method=${request.method} uri=${request.requestURI} tokenPreview=${token.take(16)}",
+                    )
+                    logger.info("Temporary security users/me authDebugFilter before chain")
+                }
+
                 filterChain.doFilter(request, response)
+
+                if (isUsersMeRequest(request)) {
+                    logger.info(
+                        "Temporary security users/me authDebugFilter after chain " +
+                            "status=${response.status} committed=${response.isCommitted}",
+                    )
+                }
             }
         }
 
@@ -218,11 +268,34 @@ class SecurityConfig {
                 response: HttpServletResponse,
                 filterChain: FilterChain,
             ) {
-                resolveAuthenticatedUid()?.let { uid ->
+                val resolvedUid = resolveAuthenticatedUid()
+
+                if (isUsersMeRequest(request)) {
+                    logger.info(
+                        "Temporary security users/me authentication state " +
+                            "method=${request.method} uri=${request.requestURI} " +
+                            "resolvedUid=$resolvedUid " +
+                            "principalName=${SecurityContextHolder.getContext().authentication?.name} " +
+                            "authClass=${SecurityContextHolder.getContext().authentication?.javaClass?.simpleName}",
+                    )
+                }
+
+                resolvedUid?.let { uid ->
                     request.setAttribute(AUTHENTICATED_UID_ATTRIBUTE, uid)
                 }
 
+                if (isUsersMeRequest(request)) {
+                    logger.info("Temporary security users/me authenticatedUidFilter before chain")
+                }
+
                 filterChain.doFilter(request, response)
+
+                if (isUsersMeRequest(request)) {
+                    logger.info(
+                        "Temporary security users/me authenticatedUidFilter after chain " +
+                            "status=${response.status} committed=${response.isCommitted}",
+                    )
+                }
             }
         }
 
@@ -384,6 +457,15 @@ class SecurityConfig {
             ?.takeIf { it.isNotBlank() }
             ?: fallbackMessage
 
+        if (isUsersMeRequest(request)) {
+            logger.warn(
+                "Temporary security users/me unauthorized " +
+                    "method=${request.method} uri=${request.requestURI} " +
+                    "message=$decodeResult hasAuthorizationHeader=${authorization.isNotBlank()} " +
+                    "tokenPreview=${token.take(16)}",
+            )
+        }
+
         response.status = HttpServletResponse.SC_UNAUTHORIZED
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()
@@ -396,6 +478,9 @@ class SecurityConfig {
     }
 
     private fun String.quoteForJson(): String = "\"${escapeJson()}\""
+
+    private fun isUsersMeRequest(request: HttpServletRequest): Boolean =
+        request.requestURI == "/users/me"
 
     private fun String.escapeJson(): String =
         replace("\\", "\\\\").replace("\"", "\\\"")

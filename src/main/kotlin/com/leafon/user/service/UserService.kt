@@ -8,6 +8,7 @@ import com.leafon.user.dto.CreateUserRequest
 import com.leafon.user.dto.UpdateUserRequest
 import com.leafon.user.entity.User
 import com.leafon.user.repository.UserRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -16,6 +17,7 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository
 ) {
+    private val logger = LoggerFactory.getLogger(UserService::class.java)
 
     fun createAuthenticated(
         authenticatedUid: String,
@@ -109,8 +111,25 @@ class UserService(
             .orElseThrow { NotFoundException("User with id $id not found") }
     }
 
-    fun findCurrentUser(authenticatedUid: String): User =
-        findById(authenticatedUserId(authenticatedUid))
+    fun findCurrentUser(authenticatedUid: String): User {
+        val authenticatedUserId = authenticatedUserId(authenticatedUid)
+        logger.info(
+            "Temporary users/me service lookup started for authenticatedUid={} parsedUserId={}",
+            authenticatedUid,
+            authenticatedUserId,
+        )
+
+        val user = findById(authenticatedUserId)
+
+        logger.info(
+            "Temporary users/me service lookup succeeded for authenticatedUid={} localUserId={} email={}",
+            authenticatedUid,
+            user.id,
+            user.email,
+        )
+
+        return user
+    }
 
     fun findOwnedById(
         id: UUID,
@@ -130,8 +149,32 @@ class UserService(
     fun updateCurrentUser(
         authenticatedUid: String,
         request: UpdateUserRequest,
-    ): User =
-        update(findCurrentUser(authenticatedUid), request)
+    ): User {
+        val existingUser = findCurrentUser(authenticatedUid)
+
+        logger.info(
+            "Temporary users/me service update started for authenticatedUid={} localUserId={} currentEmail={} requestedEmailPresent={} requestedNamePresent={} requestedPhonePresent={}",
+            authenticatedUid,
+            existingUser.id,
+            existingUser.email,
+            request.email != null,
+            request.name != null,
+            request.phone != null,
+        )
+
+        val updatedUser = update(existingUser, request)
+
+        logger.info(
+            "Temporary users/me service update finished for authenticatedUid={} localUserId={} newEmail={} newName={} newPhone={}",
+            authenticatedUid,
+            updatedUser.id,
+            updatedUser.email,
+            updatedUser.name,
+            updatedUser.phone,
+        )
+
+        return updatedUser
+    }
 
     fun updateOwnedUser(
         id: UUID,
@@ -195,6 +238,9 @@ class UserService(
 
     private fun authenticatedUserId(uid: String): UUID =
         runCatching { UUID.fromString(uid.trim()) }
+            .onFailure {
+                logger.warn("Temporary users/me failed to parse authenticatedUid={}", uid)
+            }
             .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
 
     private fun String.normalizedPhone(): String =

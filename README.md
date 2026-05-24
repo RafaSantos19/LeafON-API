@@ -1,16 +1,13 @@
 # LeafON API
 
-Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra os modulos de usuarios, vasos inteligentes, telemetria, irrigacao e alertas, usando PostgreSQL como banco de dados.
+Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autenticacao via JWT, cadastro de usuarios, gerenciamento de smart pots, rotinas, registro de telemetria e consulta de alertas.
 
-Projeto Kotlin Multiplatform com Compose Multiplatform. O app Leaf.ON centraliza telas de autenticacao, home, perfil e gerenciamento de Smart Pots, incluindo listagem, cadastro, edicao, detalhe, rotinas e alertas.
+## Integrantes
 
-projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estufas e hortas urbanas.
-
-## Integrates
 - Rafael Ferreira dos Santos
 - Miguel Gomes de Lima Coyado Vieira
 
-## Tecnologias
+## Stack
 
 - Kotlin 2.2.21
 - Spring Boot 4.0.3
@@ -23,7 +20,7 @@ projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estu
 - PostgreSQL
 - OAuth2 Resource Server com JWT
 
-## Estrutura do projeto
+## Estrutura
 
 ```text
 .
@@ -43,6 +40,7 @@ projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estu
 |   |   |           |-- auth/
 |   |   |           |-- common/
 |   |   |           |-- irrigation/
+|   |   |           |-- routine/
 |   |   |           |-- smartpot/
 |   |   |           |-- telemetry/
 |   |   |           `-- user/
@@ -55,44 +53,42 @@ projeto **Leaf.ON**, um sistema inteligente de monitoramento ambiental para estu
 `-- README.md
 ```
 
-### Pacotes principais
+Pacotes principais:
 
-- `com.leafon.LeafonApplication.kt`: ponto de entrada da aplicacao Spring Boot.
-- `auth`: estrutura de autenticacao, DTOs, mappers e servicos de token/autenticacao.
-- `user`: CRUD de usuarios, com controller, service, repository, entity, DTOs e mapper.
-- `smartpot`: estrutura para configuracao e persistencia dos vasos inteligentes.
-- `telemetry`: registro e consulta de leituras de sensores, com validacao de ownership por `SmartPot`.
-- `irrigation`: regras, eventos e comandos de irrigacao.
-- `alert`: estrutura para alertas gerados pela aplicacao.
-- `common`: configuracoes compartilhadas, tratamento de excecoes e utilitarios.
+- `auth`: autenticacao e integracao com JWT do Supabase.
+- `user`: CRUD de usuarios.
+- `smartpot`: cadastro e ownership dos vasos.
+- `routine`: configuracao logica de rotinas de irrigacao e luminosidade.
+- `telemetry`: registro e consulta de leituras.
+- `alert`: alertas gerados a partir da telemetria.
+- `common`: seguranca, excecoes e configuracoes compartilhadas.
 
-Dentro dos modulos de dominio, a organizacao segue este padrao:
+Padrao interno dos dominios:
 
 - `controller`: endpoints HTTP.
 - `service`: regras de negocio.
 - `repository`: acesso ao banco via Spring Data JPA.
-- `entity`: entidades persistidas no banco.
-- `dto`: objetos de entrada e saida da API.
-- `mapper`: conversao entre entidades e DTOs.
-- `mqtt`: publicacao ou leitura de mensagens MQTT, quando aplicavel.
+- `entity`: entidades persistidas.
+- `dto`: contratos de entrada e saida.
+- `mapper`: conversao entre entidade e DTO.
 
 ## Requisitos
 
-- JDK 21 instalado.
-- PostgreSQL acessivel pela aplicacao.
-- Variavel de ambiente `SUPABASE_DATABASE_PASSWORD` configurada, conforme usada em `src/main/resources/application.properties`.
+- JDK 21
+- PostgreSQL acessivel pela aplicacao
+- Variavel `SUPABASE_DATABASE_PASSWORD` configurada quando o `application.properties` usa placeholder
 
-O projeto usa Gradle Wrapper, entao nao e necessario instalar o Gradle manualmente.
+O projeto usa Gradle Wrapper, entao nao precisa de instalacao manual do Gradle.
 
 ## Configuracao
 
-As configuracoes principais ficam em:
+Arquivo principal:
 
 ```text
 src/main/resources/application.properties
 ```
 
-Antes de rodar a aplicacao, configure a senha do banco:
+Exemplo de variavel de ambiente:
 
 Windows PowerShell:
 
@@ -105,8 +101,6 @@ Linux/macOS:
 ```bash
 export SUPABASE_DATABASE_PASSWORD="sua_senha"
 ```
-
-Se for usar um banco local, ajuste as propriedades `spring.datasource.url`, `spring.datasource.username` e `spring.datasource.password` no arquivo `application.properties`.
 
 Exemplo minimo de configuracao para desenvolvimento:
 
@@ -126,25 +120,17 @@ leafon.supabase.admin.service-role-key=${SUPABASE_SERVICE_ROLE_KEY:}
 leafon.supabase.admin.email-confirm=true
 ```
 
-Importante:
+Observacoes importantes:
 
-- Os valores de `issuer-uri`, `jwk-set-uri` e o JWT usado nas requisicoes precisam pertencer ao mesmo projeto Supabase.
-- A tabela `smartpots` precisa usar `uuid` em `id` e `user_id`. Se a tabela existir com `bigint`, os inserts vao falhar.
+- `issuer-uri`, `jwk-set-uri` e o JWT das requisicoes precisam pertencer ao mesmo projeto Supabase.
+- O projeto nao possui migracoes versionadas neste momento. As tabelas precisam existir no banco.
+- A tabela `smartpots` precisa usar `uuid` em `id` e `user_id`.
 
-### Tabela de usuarios
+## Banco de dados
 
-A entidade `User` esta mapeada no projeto para a tabela `users`. O nome `users` e recomendado porque `user` pode ser palavra reservada em alguns bancos SQL.
+### users
 
-| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
-| --- | --- | --- | --- | --- |
-| `id` | `UUID?` | `uuid` | Sim | Chave primaria. Deve receber o mesmo UUID do claim `sub` do Supabase Auth. |
-| `email` | `String` | `varchar(255)` | Sim | Deve ser unico. |
-| `name` | `String?` | `varchar(255)` | Nao | Nome opcional do usuario. |
-| `phone` | `String?` | `varchar(255)` | Nao | Telefone do usuario. No fluxo atual de criacao ele e enviado no cadastro. |
-| `created_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data de criacao preenchida pelo Hibernate. |
-| `updated_at` | `OffsetDateTime?` | `timestamp with time zone` | Nao | Data da ultima atualizacao preenchida pelo Hibernate. |
-
-Exemplo para criar a tabela manualmente no PostgreSQL:
+A entidade `User` esta mapeada para a tabela `users`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS users (
@@ -157,21 +143,9 @@ CREATE TABLE IF NOT EXISTS users (
 );
 ```
 
-### Tabela de smart pots
+### smartpots
 
-A entidade `SmartPot` esta mapeada para a tabela `smartpots` e pertence a um usuario autenticado.
-
-| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
-| --- | --- | --- | --- | --- |
-| `id` | `UUID?` | `uuid` | Sim | Chave primaria do vaso. |
-| `user_id` | `UUID?` | `uuid` | Sim | Dono do vaso. Deve referenciar `users(id)`. |
-| `plant_name` | `String?` | `varchar(255)` | Sim | Nome da planta. |
-| `humidity_min` | `Int?` | `integer` | Sim | Valor minimo permitido, entre `0` e `100`. |
-| `device_id` | `String?` | `varchar(255)` | Nao | Identificador do dispositivo. Deve ser unico quando informado. |
-| `created_at` | `Instant?` | `timestamp with time zone` | Sim | Definido na criacao. |
-| `updated_at` | `Instant?` | `timestamp with time zone` | Sim | Atualizado a cada alteracao. |
-
-Exemplo para criar a tabela manualmente no PostgreSQL:
+A entidade `SmartPot` esta mapeada para a tabela `smartpots`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS smartpots (
@@ -185,21 +159,9 @@ CREATE TABLE IF NOT EXISTS smartpots (
 );
 ```
 
-### Tabela de telemetria
+### telemetry_readings
 
-A entidade `TelemetryReading` esta mapeada para a tabela `telemetry_readings` e cada leitura pertence a um `SmartPot`.
-
-| Campo | Tipo Kotlin | Tipo PostgreSQL sugerido | Obrigatorio | Observacoes |
-| --- | --- | --- | --- | --- |
-| `id` | `UUID?` | `uuid` | Sim | Chave primaria da leitura. |
-| `smart_pot_id` | `UUID?` | `uuid` | Sim | Vaso dono da leitura. Deve referenciar `smartpots(id)`. |
-| `soil_humidity` | `Int?` | `integer` | Sim | Umidade do solo entre `0` e `100`. |
-| `temperature` | `Double?` | `double precision` | Sim | Temperatura aceita decimal. |
-| `luminosity` | `Double?` | `double precision` | Sim | Luminosidade aceita decimal. |
-| `read_at` | `Instant?` | `timestamp with time zone` | Sim | Momento em que o sensor realizou a leitura. |
-| `created_at` | `Instant?` | `timestamp with time zone` | Sim | Momento em que a API persistiu o registro. |
-
-Exemplo para criar a tabela manualmente no PostgreSQL:
+A entidade `TelemetryReading` esta mapeada para a tabela `telemetry_readings`.
 
 ```sql
 CREATE TABLE IF NOT EXISTS telemetry_readings (
@@ -216,21 +178,74 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_readings_smart_pot_read_at
     ON telemetry_readings (smart_pot_id, read_at DESC);
 ```
 
+### routines
+
+A entidade `Routine` esta mapeada para a tabela `routines`.
+
+No MVP atual, a rotina e apenas uma configuracao logica do sistema. Nao ha scheduler automatico nem acionamento real de hardware.
+
+```sql
+CREATE TABLE IF NOT EXISTS routines (
+    id uuid PRIMARY KEY,
+    smart_pot_id uuid NOT NULL REFERENCES smartpots(id),
+    type varchar(30) NOT NULL CHECK (type IN ('IRRIGATION', 'LIGHTING')),
+    name varchar(255) NOT NULL,
+    scheduled_time time NOT NULL,
+    days_of_week varchar(255) NOT NULL,
+    duration_sec integer NOT NULL CHECK (duration_sec > 0),
+    active boolean NOT NULL,
+    last_executed_at timestamp with time zone,
+    created_at timestamp with time zone NOT NULL,
+    updated_at timestamp with time zone NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_routines_smart_pot_created_at
+    ON routines (smart_pot_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_routines_smart_pot_active
+    ON routines (smart_pot_id, active);
+```
+
+### alerts
+
+A entidade `Alert` esta mapeada para a tabela `alerts`.
+
+No MVP atual, um alerta e criado automaticamente quando uma `TelemetryReading` chega com `soil_humidity < smartpots.humidity_min`.
+
+```sql
+CREATE TABLE IF NOT EXISTS alerts (
+    id uuid PRIMARY KEY,
+    smart_pot_id uuid NOT NULL REFERENCES smartpots(id),
+    telemetry_reading_id uuid REFERENCES telemetry_readings(id),
+    type varchar(50) NOT NULL CHECK (type IN ('LOW_SOIL_HUMIDITY')),
+    message text NOT NULL,
+    status varchar(20) NOT NULL CHECK (status IN ('PENDING', 'READ')),
+    created_at timestamp with time zone NOT NULL,
+    read_at timestamp with time zone
+);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_smart_pot_created_at
+    ON alerts (smart_pot_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_alerts_smart_pot_status_created_at
+    ON alerts (smart_pot_id, status, created_at DESC);
+```
+
 ## Como rodar
 
-No Windows:
+Windows:
 
 ```powershell
 .\gradlew.bat bootRun
 ```
 
-No Linux/macOS:
+Linux/macOS:
 
 ```bash
 ./gradlew bootRun
 ```
 
-Por padrao, a aplicacao sobe em:
+URL padrao:
 
 ```text
 http://localhost:8080
@@ -238,53 +253,25 @@ http://localhost:8080
 
 ## Comandos uteis
 
-Listar tarefas disponiveis do Gradle:
-
 ```powershell
 .\gradlew.bat tasks
-```
-
-Rodar a aplicacao:
-
-```powershell
-.\gradlew.bat bootRun
-```
-
-Rodar os testes:
-
-```powershell
 .\gradlew.bat test
-```
-
-Gerar build completo:
-
-```powershell
 .\gradlew.bat build
-```
-
-Gerar o JAR executavel:
-
-```powershell
 .\gradlew.bat bootJar
+.\gradlew.bat clean
 ```
 
-Executar o JAR gerado:
+Executar o jar:
 
 ```powershell
 java -jar build/libs/leafon-api-0.0.1-SNAPSHOT.jar
 ```
 
-Limpar arquivos gerados:
-
-```powershell
-.\gradlew.bat clean
-```
-
 Em Linux/macOS, substitua `.\gradlew.bat` por `./gradlew`.
 
-## Rotas implementadas
+## Endpoints
 
-Atualmente, a API expoe:
+Rotas implementadas:
 
 ```text
 GET    /users
@@ -302,35 +289,49 @@ GET    /smart-pots/{id}
 PUT    /smart-pots/{id}
 DELETE /smart-pots/{id}
 
+POST   /routines
+GET    /routines
+GET    /routines/{id}
+PUT    /routines/{id}
+PATCH  /routines/{id}/activate
+PATCH  /routines/{id}/deactivate
+PATCH  /routines/{id}/simulate-execution
+DELETE /routines/{id}
+
 POST   /telemetry
 GET    /telemetry
 GET    /telemetry/latest
+
+GET    /alerts
+GET    /alerts/unread
+PATCH  /alerts/{id}/read
 ```
 
-Observacoes sobre `smart-pots`:
+Regras relevantes:
 
-- O frontend nao envia `userId`.
-- O `userId` e extraido do JWT autenticado.
-- Um usuario so pode listar, buscar, atualizar ou deletar os proprios vasos.
-- `deviceId` duplicado retorna `409 Conflict`.
-- Validacoes invalidas retornam `400 Bad Request`.
-- Vaso inexistente ou sem posse do usuario retorna `404 Not Found`.
+- O `userId` nao vem no body. Ele e extraido do JWT autenticado.
+- Um usuario so pode acessar `smart-pots`, rotinas, leituras e alertas dos proprios recursos.
+- `POST /routines` exige um `smartPotId` pertencente ao usuario autenticado.
+- `GET /routines` ordena por `createdAt DESC`.
+- `PATCH /routines/{id}/activate` e `PATCH /routines/{id}/deactivate` apenas alteram o status logico da rotina.
+- `PATCH /routines/{id}/simulate-execution` apenas preenche `lastExecutedAt`.
+- `POST /telemetry` ainda recebe `smartPotId` no body.
+- `GET /telemetry` ordena por `readAt DESC`.
+- `GET /alerts` e `GET /alerts/unread` ordenam por `createdAt DESC`.
+- `PATCH /alerts/{id}/read` marca o alerta como `READ` e preenche `readAt`.
+- `soilHumidity` abaixo de `humidityMin` cria automaticamente um alerta `LOW_SOIL_HUMIDITY`.
 
-Observacoes sobre `telemetry`:
+Respostas esperadas mais comuns:
 
-- O frontend nao envia `userId`.
-- O `userId` e extraido do JWT autenticado.
-- O `POST /telemetry` recebe `smartPotId` no body de forma temporaria.
-- O usuario autenticado so pode registrar e consultar leituras dos proprios vasos.
-- `GET /telemetry` ordena as leituras por `readAt` em ordem decrescente.
-- `GET /telemetry/latest` retorna apenas a leitura mais recente do vaso informado.
-- `smartPotId` inexistente retorna `404 Not Found`.
-- `smartPotId` de outro usuario retorna `403 Forbidden`.
-- `soilHumidity` fora do intervalo valido retorna `400 Bad Request`.
+- `400 Bad Request`: validacao invalida
+- `401 Unauthorized`: token ausente ou invalido
+- `403 Forbidden`: recurso acessivel, mas fora do ownership do usuario
+- `404 Not Found`: recurso inexistente ou, no caso de alertas, nao pertencente ao usuario
+- `409 Conflict`: conflito de dados, como `deviceId` duplicado
 
-## Exemplos de telemetria
+## Exemplos
 
-Exemplo de `POST`:
+Criar telemetria:
 
 ```bash
 curl -X POST http://localhost:8080/telemetry \
@@ -345,22 +346,74 @@ curl -X POST http://localhost:8080/telemetry \
   }'
 ```
 
-Exemplo de `GET`:
+Listar telemetria de um vaso:
 
 ```bash
 curl -X GET "http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
   -H "Authorization: Bearer SEU_JWT"
 ```
 
-Exemplo de `GET /latest`:
+Buscar a ultima leitura:
 
 ```bash
 curl -X GET "http://localhost:8080/telemetry/latest?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
   -H "Authorization: Bearer SEU_JWT"
 ```
 
+Criar rotina:
+
+```bash
+curl -X POST http://localhost:8080/routines \
+  -H "Authorization: Bearer SEU_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "smartPotId": "273f9192-d2c1-467d-9855-3f0e502e9f42",
+    "type": "IRRIGATION",
+    "name": "Irrigacao da manha",
+    "scheduledTime": "08:30:00",
+    "daysOfWeek": "MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY",
+    "durationSec": 120,
+    "active": true
+  }'
+```
+
+Listar rotinas:
+
+```bash
+curl -X GET http://localhost:8080/routines \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
+Simular execucao de rotina:
+
+```bash
+curl -X PATCH http://localhost:8080/routines/0f6b5c77-84c4-4ad5-8b69-8a87d9f7d2e1/simulate-execution \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
+Listar alertas:
+
+```bash
+curl -X GET http://localhost:8080/alerts \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
+Listar alertas nao lidos:
+
+```bash
+curl -X GET http://localhost:8080/alerts/unread \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
+Marcar alerta como lido:
+
+```bash
+curl -X PATCH http://localhost:8080/alerts/0f6b5c77-84c4-4ad5-8b69-8a87d9f7d2e1/read \
+  -H "Authorization: Bearer SEU_JWT"
+```
+
 ## Links
 
-- Repositórios do projeto: [Frontend](https://github.com/RafaSantos19/LeafON-KMP)
-- Repositórios do projeto: [Backend](https://github.com/RafaSantos19/LeafON-API)
-- Documentação do Projeto (Parcial): [Link do Docs](https://docs.google.com/document/d/1GGbEGgVE6KhAxyz87omWVD5X1HY0fGU79IRKmRMV-Ec/edit?usp=sharing)
+- Frontend: https://github.com/RafaSantos19/LeafON-KMP
+- Backend: https://github.com/RafaSantos19/LeafON-API
+- Documento parcial do projeto: https://docs.google.com/document/d/1GGbEGgVE6KhAxyz87omWVD5X1HY0fGU79IRKmRMV-Ec/edit?usp=sharing

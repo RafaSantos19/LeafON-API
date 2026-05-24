@@ -1,5 +1,6 @@
 package com.leafon.telemetry.service
 
+import com.leafon.alert.service.AlertService
 import com.leafon.common.exception.ForbiddenException
 import com.leafon.common.exception.NotFoundException
 import com.leafon.smartpot.entity.SmartPot
@@ -16,6 +17,7 @@ import java.util.UUID
 class TelemetryService(
     private val telemetryRepository: TelemetryRepository,
     private val smartPotRepository: SmartPotRepository,
+    private val alertService: AlertService,
 ) {
 
     @Transactional
@@ -25,7 +27,7 @@ class TelemetryService(
     ): TelemetryReading {
         val smartPot = findAccessibleSmartPot(request.smartPotId, authenticatedUserId)
 
-        return telemetryRepository.save(
+        val telemetryReading = telemetryRepository.save(
             TelemetryReading(
                 smartPot = smartPot,
                 soilHumidity = request.soilHumidity,
@@ -34,6 +36,10 @@ class TelemetryService(
                 readAt = request.readAt,
             ),
         )
+
+        maybeCreateLowSoilHumidityAlert(smartPot, telemetryReading)
+
+        return telemetryReading
     }
 
     fun findAll(
@@ -66,5 +72,17 @@ class TelemetryService(
         }
 
         return smartPot
+    }
+
+    private fun maybeCreateLowSoilHumidityAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ) {
+        val humidityMin = smartPot.humidityMin ?: return
+        val soilHumidity = telemetryReading.soilHumidity ?: return
+
+        if (soilHumidity < humidityMin) {
+            alertService.createLowSoilHumidityAlert(smartPot, telemetryReading)
+        }
     }
 }
