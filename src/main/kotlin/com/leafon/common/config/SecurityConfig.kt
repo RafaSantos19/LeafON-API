@@ -12,6 +12,7 @@ import org.springframework.cache.concurrent.ConcurrentMapCache
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.security.authentication.AnonymousAuthenticationToken
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
@@ -34,12 +35,15 @@ import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.web.client.RestOperations
 import org.springframework.web.client.RestTemplate
+import org.springframework.web.cors.CorsConfiguration
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.filter.OncePerRequestFilter
 import org.springframework.web.context.request.RequestContextHolder
 import org.springframework.web.context.request.ServletRequestAttributes
 import java.nio.charset.StandardCharsets
-import java.time.Instant
 import java.time.Duration
+import java.time.Instant
 import java.util.Base64
 
 @Configuration
@@ -67,6 +71,7 @@ class SecurityConfig {
         supabaseJwtConverter: SupabaseJwtConverter,
     ): SecurityFilterChain {
         http
+            .cors { }
             .csrf { it.disable() }
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
@@ -76,6 +81,7 @@ class SecurityConfig {
             .addFilterAfter(authenticatedUidFilter, BearerTokenAuthenticationFilter::class.java)
             .authorizeHttpRequests {
                 it
+                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/auth/**", "/health").permitAll()
                     .anyRequest().authenticated()
             }
@@ -96,6 +102,30 @@ class SecurityConfig {
             }
 
         return http.build()
+    }
+
+    @Bean
+    fun corsConfigurationSource(): CorsConfigurationSource {
+        val config = CorsConfiguration().apply {
+            allowedOriginPatterns = listOf(
+                "http://localhost:*",
+                "http://127.0.0.1:*",
+            )
+            allowedMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+            allowedHeaders = listOf(
+                HttpHeaders.AUTHORIZATION,
+                HttpHeaders.CONTENT_TYPE,
+                HttpHeaders.ACCEPT,
+                HttpHeaders.ORIGIN,
+            )
+            exposedHeaders = listOf(AUTH_RESULT_HEADER)
+            allowCredentials = false
+            maxAge = 3600
+        }
+
+        return UrlBasedCorsConfigurationSource().also {
+            it.registerCorsConfiguration("/**", config)
+        }
     }
 
     @Bean
