@@ -168,8 +168,9 @@ CREATE TABLE IF NOT EXISTS telemetry_readings (
     id uuid PRIMARY KEY,
     smart_pot_id uuid NOT NULL REFERENCES smartpots(id),
     soil_humidity integer NOT NULL CHECK (soil_humidity BETWEEN 0 AND 100),
+    air_humidity double precision NOT NULL CHECK (air_humidity BETWEEN 0 AND 100),
     temperature double precision NOT NULL,
-    luminosity double precision NOT NULL,
+    luminosity varchar(10) NOT NULL CHECK (luminosity IN ('CLARO', 'ESCURO')),
     read_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone NOT NULL
 );
@@ -298,9 +299,9 @@ PATCH  /routines/{id}/deactivate
 PATCH  /routines/{id}/simulate-execution
 DELETE /routines/{id}
 
-POST   /telemetry
-GET    /telemetry
-GET    /telemetry/latest
+POST   /telemetry?smartPotId={uuid}
+GET    /telemetry?smartPotId={uuid}
+GET    /telemetry/latest?smartPotId={uuid}
 
 GET    /alerts
 GET    /alerts/unread
@@ -315,11 +316,48 @@ Regras relevantes:
 - `GET /routines` ordena por `createdAt DESC`.
 - `PATCH /routines/{id}/activate` e `PATCH /routines/{id}/deactivate` apenas alteram o status logico da rotina.
 - `PATCH /routines/{id}/simulate-execution` apenas preenche `lastExecutedAt`.
-- `POST /telemetry` ainda recebe `smartPotId` no body.
+- `POST /telemetry` recebe `smartPotId` como query parameter.
 - `GET /telemetry` ordena por `readAt DESC`.
 - `GET /alerts` e `GET /alerts/unread` ordenam por `createdAt DESC`.
 - `PATCH /alerts/{id}/read` marca o alerta como `READ` e preenche `readAt`.
 - `soilHumidity` abaixo de `humidityMin` cria automaticamente um alerta `LOW_SOIL_HUMIDITY`.
+
+### Contrato de telemetria
+
+O `POST /telemetry` exige o `smartPotId` como query parameter e um JWT valido. O horario da leitura (`readAt`) e gerado automaticamente pelo servidor.
+
+Payload:
+
+```json
+{
+  "soilHumidity": 92,
+  "airHumidity": 68.4,
+  "temperature": 21.4,
+  "luminosityStatus": "CLARO"
+}
+```
+
+Campos:
+
+| Campo | Tipo | Regra |
+|---|---|---|
+| `soilHumidity` | inteiro | Valor entre 0 e 100 |
+| `airHumidity` | decimal | Valor entre 0 e 100 |
+| `temperature` | decimal | Temperatura coletada pelo sensor |
+| `luminosityStatus` | texto | Aceita somente `CLARO` ou `ESCURO` |
+
+Campos adicionais enviados pelo sensor, como `soilHumidityRaw`, `luminosityDigital` e `readAt`, sao aceitos e ignorados.
+
+As respostas do `POST /telemetry`, `GET /telemetry` e `GET /telemetry/latest` usam o mesmo formato:
+
+```json
+{
+  "soilHumidity": 92,
+  "airHumidity": 68.4,
+  "temperature": 21.4,
+  "luminosityStatus": "CLARO"
+}
+```
 
 Respostas esperadas mais comuns:
 
@@ -331,19 +369,78 @@ Respostas esperadas mais comuns:
 
 ## Exemplos
 
+### Testar no Insomnia
+
+Crie uma requisicao com as seguintes configuracoes:
+
+- Metodo: `POST`
+- URL: `http://localhost:8080/telemetry?smartPotId=SEU_SMART_POT_ID`
+- Auth: `Bearer Token`
+- Token: JWT valido do usuario proprietario do vaso
+- Body: `JSON`
+
+Headers:
+
+```text
+Content-Type: application/json
+Authorization: Bearer SEU_JWT
+```
+
+Body:
+
+```json
+{
+  "soilHumidity": 92,
+  "soilHumidityRaw": 352,
+  "airHumidity": 68.4,
+  "temperature": 21.4,
+  "luminosityStatus": "CLARO",
+  "luminosityDigital": 0,
+  "readAt": "2026-05-30T12:00:00Z"
+}
+```
+
+Os campos `soilHumidityRaw`, `luminosityDigital` e `readAt` nao sao persistidos. O servidor gera o horario da leitura automaticamente.
+
+Resposta esperada (`201 Created`):
+
+```json
+{
+  "soilHumidity": 92,
+  "airHumidity": 68.4,
+  "temperature": 21.4,
+  "luminosityStatus": "CLARO"
+}
+```
+
+### Exemplos com curl
+
 Criar telemetria:
 
 ```bash
-curl -X POST http://localhost:8080/telemetry \
+curl -X POST "http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
   -H "Authorization: Bearer SEU_JWT" \
   -H "Content-Type: application/json" \
   -d '{
-    "smartPotId": "273f9192-d2c1-467d-9855-3f0e502e9f42",
     "soilHumidity": 67,
+    "soilHumidityRaw": 352,
+    "airHumidity": 68.4,
     "temperature": 24.5,
-    "luminosity": 812.3,
-    "readAt": "2026-05-12T14:30:00Z"
+    "luminosityStatus": "CLARO",
+    "luminosityDigital": 0,
+    "readAt": "2026-05-30T12:00:00Z"
   }'
+```
+
+Resposta (`201 Created`):
+
+```json
+{
+  "soilHumidity": 67,
+  "airHumidity": 68.4,
+  "temperature": 24.5,
+  "luminosityStatus": "CLARO"
+}
 ```
 
 Listar telemetria de um vaso:
@@ -351,6 +448,19 @@ Listar telemetria de um vaso:
 ```bash
 curl -X GET "http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42" \
   -H "Authorization: Bearer SEU_JWT"
+```
+
+Resposta (`200 OK`):
+
+```json
+[
+  {
+    "soilHumidity": 67,
+    "airHumidity": 68.4,
+    "temperature": 24.5,
+    "luminosityStatus": "CLARO"
+  }
+]
 ```
 
 Buscar a ultima leitura:

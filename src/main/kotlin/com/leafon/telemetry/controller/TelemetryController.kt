@@ -28,9 +28,10 @@ class TelemetryController(
     @ResponseStatus(HttpStatus.CREATED)
     fun create(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
+        @RequestParam smartPotId: UUID,
         @Valid @RequestBody request: TelemetryCreateRequest,
     ): TelemetryResponse =
-        telemetryService.create(request, authenticatedUserId(uid)).toResponse()
+        telemetryService.create(smartPotId, request, authenticatedUserId(uid)).toResponse()
 
     //Params http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42
     @GetMapping

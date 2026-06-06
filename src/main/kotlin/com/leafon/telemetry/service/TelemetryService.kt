@@ -11,6 +11,7 @@ import com.leafon.telemetry.entity.TelemetryReading
 import com.leafon.telemetry.repository.TelemetryRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Instant
 import java.util.UUID
 
 @Service
@@ -22,18 +23,20 @@ class TelemetryService(
 
     @Transactional
     fun create(
+        smartPotId: UUID,
         request: TelemetryCreateRequest,
         authenticatedUserId: UUID,
     ): TelemetryReading {
-        val smartPot = findAccessibleSmartPot(request.smartPotId, authenticatedUserId)
+        val smartPot = findAccessibleSmartPot(smartPotId, authenticatedUserId)
 
         val telemetryReading = telemetryRepository.save(
             TelemetryReading(
                 smartPot = smartPot,
-                soilHumidity = request.soilHumidity,
+                soilHumidityPercent = request.soilHumidity,
+                airHumidity = request.airHumidity,
                 temperature = request.temperature,
-                luminosity = request.luminosity,
-                readAt = request.readAt,
+                luminosity = request.luminosityStatus,
+                readAt = Instant.now(),
             ),
         )
 
@@ -79,7 +82,7 @@ class TelemetryService(
         telemetryReading: TelemetryReading,
     ) {
         val humidityMin = smartPot.humidityMin ?: return
-        val soilHumidity = telemetryReading.soilHumidity ?: return
+        val soilHumidity = telemetryReading.soilHumidityPercent ?: return
 
         if (soilHumidity < humidityMin) {
             alertService.createLowSoilHumidityAlert(smartPot, telemetryReading)

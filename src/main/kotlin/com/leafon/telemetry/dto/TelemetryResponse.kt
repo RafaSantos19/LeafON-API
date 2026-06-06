@@ -1,14 +1,10 @@
 package com.leafon.telemetry.dto
 
-import java.time.Instant
-import java.util.UUID
+import com.leafon.telemetry.enums.Luminosity
 
 data class TelemetryResponse(
-    val id: UUID?,
-    val smartPotId: UUID?,
     val soilHumidity: Int?,
+    val airHumidity: Double?,
     val temperature: Double?,
-    val luminosity: Double?,
-    val readAt: Instant?,
-    val createdAt: Instant?,
+    val luminosityStatus: Luminosity?,
 )

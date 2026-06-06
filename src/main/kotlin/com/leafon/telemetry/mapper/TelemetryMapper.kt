@@ -4,11 +4,8 @@ import com.leafon.telemetry.dto.TelemetryResponse
 import com.leafon.telemetry.entity.TelemetryReading
 
 fun TelemetryReading.toResponse() = TelemetryResponse(
-    id = id,
-    smartPotId = smartPot?.id,
-    soilHumidity = soilHumidity,
+    soilHumidity = soilHumidityPercent,
+    airHumidity = airHumidity,
     temperature = temperature,
-    luminosity = luminosity,
-    readAt = readAt,
-    createdAt = createdAt,
+    luminosityStatus = luminosity,
 )
