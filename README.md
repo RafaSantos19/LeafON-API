@@ -211,14 +211,14 @@ CREATE INDEX IF NOT EXISTS idx_routines_smart_pot_active
 
 A entidade `Alert` esta mapeada para a tabela `alerts`.
 
-No MVP atual, um alerta e criado automaticamente quando uma `TelemetryReading` chega com `soil_humidity < smartpots.humidity_min`.
+No MVP atual, alertas sao criados automaticamente quando uma `TelemetryReading` viola limites configurados ou fixos do sistema.
 
 ```sql
 CREATE TABLE IF NOT EXISTS alerts (
     id uuid PRIMARY KEY,
     smart_pot_id uuid NOT NULL REFERENCES smartpots(id),
     telemetry_reading_id uuid REFERENCES telemetry_readings(id),
-    type varchar(50) NOT NULL CHECK (type IN ('LOW_SOIL_HUMIDITY')),
+    type varchar(50) NOT NULL CHECK (type IN ('LOW_SOIL_HUMIDITY', 'LOW_AIR_HUMIDITY', 'HIGH_TEMPERATURE')),
     message text NOT NULL,
     status varchar(20) NOT NULL CHECK (status IN ('PENDING', 'READ')),
     created_at timestamp with time zone NOT NULL,
@@ -230,6 +230,15 @@ CREATE INDEX IF NOT EXISTS idx_alerts_smart_pot_created_at
 
 CREATE INDEX IF NOT EXISTS idx_alerts_smart_pot_status_created_at
     ON alerts (smart_pot_id, status, created_at DESC);
+```
+
+Se a tabela `alerts` ja existir com a constraint antiga aceitando apenas `LOW_SOIL_HUMIDITY`, atualize o `CHECK`:
+
+```sql
+ALTER TABLE alerts DROP CONSTRAINT IF EXISTS ck_alerts_type;
+
+ALTER TABLE alerts ADD CONSTRAINT ck_alerts_type
+    CHECK (type IN ('LOW_SOIL_HUMIDITY', 'LOW_AIR_HUMIDITY', 'HIGH_TEMPERATURE'));
 ```
 
 ## Como rodar
@@ -321,6 +330,8 @@ Regras relevantes:
 - `GET /alerts` e `GET /alerts/unread` ordenam por `createdAt DESC`.
 - `PATCH /alerts/{id}/read` marca o alerta como `READ` e preenche `readAt`.
 - `soilHumidity` abaixo de `humidityMin` cria automaticamente um alerta `LOW_SOIL_HUMIDITY`.
+- `airHumidity` abaixo de `40.0` cria automaticamente um alerta `LOW_AIR_HUMIDITY`.
+- `temperature` acima de `35.0` cria automaticamente um alerta `HIGH_TEMPERATURE`.
 
 ### Contrato de telemetria
 

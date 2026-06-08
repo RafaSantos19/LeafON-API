@@ -22,12 +22,49 @@ class AlertService(
         smartPot: SmartPot,
         telemetryReading: TelemetryReading,
     ): Alert =
+        createTelemetryAlert(
+            smartPot = smartPot,
+            telemetryReading = telemetryReading,
+            type = AlertType.LOW_SOIL_HUMIDITY,
+            message = LOW_SOIL_HUMIDITY_MESSAGE,
+        )
+
+    @Transactional
+    fun createLowAirHumidityAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ): Alert =
+        createTelemetryAlert(
+            smartPot = smartPot,
+            telemetryReading = telemetryReading,
+            type = AlertType.LOW_AIR_HUMIDITY,
+            message = LOW_AIR_HUMIDITY_MESSAGE,
+        )
+
+    @Transactional
+    fun createHighTemperatureAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ): Alert =
+        createTelemetryAlert(
+            smartPot = smartPot,
+            telemetryReading = telemetryReading,
+            type = AlertType.HIGH_TEMPERATURE,
+            message = HIGH_TEMPERATURE_MESSAGE,
+        )
+
+    private fun createTelemetryAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+        type: AlertType,
+        message: String,
+    ): Alert =
         alertRepository.save(
             Alert(
                 smartPot = smartPot,
                 telemetryReading = telemetryReading,
-                type = AlertType.LOW_SOIL_HUMIDITY,
-                message = LOW_SOIL_HUMIDITY_MESSAGE,
+                type = type,
+                message = message,
                 status = AlertStatus.PENDING,
             ),
         )
@@ -60,5 +97,9 @@ class AlertService(
     companion object {
         private const val LOW_SOIL_HUMIDITY_MESSAGE =
             "Umidade do solo abaixo do limite configurado para este vaso."
+        private const val LOW_AIR_HUMIDITY_MESSAGE =
+            "Umidade do ar abaixo do limite minimo configurado pelo sistema."
+        private const val HIGH_TEMPERATURE_MESSAGE =
+            "Temperatura acima do limite maximo configurado pelo sistema."
     }
 }

@@ -40,7 +40,7 @@ class TelemetryService(
             ),
         )
 
-        maybeCreateLowSoilHumidityAlert(smartPot, telemetryReading)
+        maybeCreateAlerts(smartPot, telemetryReading)
 
         return telemetryReading
     }
@@ -77,6 +77,15 @@ class TelemetryService(
         return smartPot
     }
 
+    private fun maybeCreateAlerts(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ) {
+        maybeCreateLowSoilHumidityAlert(smartPot, telemetryReading)
+        maybeCreateLowAirHumidityAlert(smartPot, telemetryReading)
+        maybeCreateHighTemperatureAlert(smartPot, telemetryReading)
+    }
+
     private fun maybeCreateLowSoilHumidityAlert(
         smartPot: SmartPot,
         telemetryReading: TelemetryReading,
@@ -87,5 +96,32 @@ class TelemetryService(
         if (soilHumidity < humidityMin) {
             alertService.createLowSoilHumidityAlert(smartPot, telemetryReading)
         }
+    }
+
+    private fun maybeCreateLowAirHumidityAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ) {
+        val airHumidity = telemetryReading.airHumidity ?: return
+
+        if (airHumidity < MIN_AIR_HUMIDITY_PERCENT) {
+            alertService.createLowAirHumidityAlert(smartPot, telemetryReading)
+        }
+    }
+
+    private fun maybeCreateHighTemperatureAlert(
+        smartPot: SmartPot,
+        telemetryReading: TelemetryReading,
+    ) {
+        val temperature = telemetryReading.temperature ?: return
+
+        if (temperature > MAX_TEMPERATURE_CELSIUS) {
+            alertService.createHighTemperatureAlert(smartPot, telemetryReading)
+        }
+    }
+
+    companion object {
+        private const val MIN_AIR_HUMIDITY_PERCENT = 40.0
+        private const val MAX_TEMPERATURE_CELSIUS = 35.0
     }
 }
