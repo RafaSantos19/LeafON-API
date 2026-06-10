@@ -9,6 +9,8 @@ import com.leafon.smartpot.repository.SmartPotRepository
 import com.leafon.telemetry.dto.TelemetryCreateRequest
 import com.leafon.telemetry.entity.TelemetryReading
 import com.leafon.telemetry.repository.TelemetryRepository
+import jakarta.validation.ConstraintViolationException
+import jakarta.validation.Validator
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Instant
@@ -19,6 +21,7 @@ class TelemetryService(
     private val telemetryRepository: TelemetryRepository,
     private val smartPotRepository: SmartPotRepository,
     private val alertService: AlertService,
+    private val validator: Validator,
 ) {
 
     @Transactional
@@ -27,6 +30,7 @@ class TelemetryService(
         request: TelemetryCreateRequest,
         authenticatedUserId: UUID,
     ): TelemetryReading {
+        validate(request)
         val smartPot = findAccessibleSmartPot(smartPotId, authenticatedUserId)
 
         val telemetryReading = telemetryRepository.save(
@@ -43,6 +47,13 @@ class TelemetryService(
         maybeCreateAlerts(smartPot, telemetryReading)
 
         return telemetryReading
+    }
+
+    private fun validate(request: TelemetryCreateRequest) {
+        val violations = validator.validate(request)
+        if (violations.isNotEmpty()) {
+            throw ConstraintViolationException(violations)
+        }
     }
 
     fun findAll(

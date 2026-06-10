@@ -4,6 +4,7 @@ plugins {
 	id("org.springframework.boot") version "4.0.3"
 	id("io.spring.dependency-management") version "1.1.7"
 	kotlin("plugin.jpa") version "2.2.21"
+	id("org.jetbrains.kotlinx.kover") version "0.9.8"
 }
 
 group = "com.leafon"
@@ -45,6 +46,7 @@ dependencies {
 	testImplementation("org.springframework.security:spring-security-test")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
 	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+	testImplementation("org.mockito.kotlin:mockito-kotlin:6.1.0")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -62,4 +64,27 @@ allOpen {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+kover {
+	reports {
+		filters {
+			excludes {
+				classes(
+					"com.leafon.LeafonApplication*",
+					"com.leafon.*.dto.*",
+					"com.leafon.*.exception.*",
+					"com.leafon.common.config.*",
+					"com.leafon.common.exception.*",
+				)
+			}
+		}
+
+		total {
+			html {
+				title = "LeafON API - Cobertura de Testes"
+				htmlDir = layout.buildDirectory.dir("reports/kover/html")
+			}
+		}
+	}
 }
