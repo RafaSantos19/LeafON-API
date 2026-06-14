@@ -7,6 +7,9 @@ import com.leafon.routine.dto.RoutineResponse
 import com.leafon.routine.dto.RoutineUpdateRequest
 import com.leafon.routine.mapper.toResponse
 import com.leafon.routine.service.RoutineService
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.DeleteMapping
@@ -24,12 +27,15 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/routines")
+@Tag(name = "Rotinas", description = "Gerenciamento das rotinas de irrigacao e iluminacao.")
+@SecurityRequirement(name = "bearerAuth")
 class RoutineController(
     private val routineService: RoutineService,
 ) {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Criar rotina")
     fun create(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: RoutineCreateRequest,
@@ -37,12 +43,14 @@ class RoutineController(
         routineService.create(request, authenticatedUserId(uid)).toResponse()
 
     @GetMapping
+    @Operation(summary = "Listar rotinas")
     fun findAll(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): List<RoutineResponse> =
         routineService.findAll(authenticatedUserId(uid)).map { it.toResponse() }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Buscar rotina por ID")
     fun findById(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
@@ -50,6 +58,7 @@ class RoutineController(
         routineService.findById(id, authenticatedUserId(uid)).toResponse()
 
     @PutMapping("/{id}")
+    @Operation(summary = "Atualizar rotina")
     fun update(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
@@ -58,6 +67,7 @@ class RoutineController(
         routineService.update(id, request, authenticatedUserId(uid)).toResponse()
 
     @PatchMapping("/{id}/activate")
+    @Operation(summary = "Ativar rotina")
     fun activate(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
@@ -65,6 +75,7 @@ class RoutineController(
         routineService.activate(id, authenticatedUserId(uid)).toResponse()
 
     @PatchMapping("/{id}/deactivate")
+    @Operation(summary = "Desativar rotina")
     fun deactivate(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
@@ -72,6 +83,7 @@ class RoutineController(
         routineService.deactivate(id, authenticatedUserId(uid)).toResponse()
 
     @PatchMapping("/{id}/simulate-execution")
+    @Operation(summary = "Simular execucao da rotina")
     fun simulateExecution(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
@@ -80,6 +92,7 @@ class RoutineController(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Excluir rotina")
     fun delete(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,

@@ -6,6 +6,11 @@ import com.leafon.telemetry.dto.TelemetryCreateRequest
 import com.leafon.telemetry.dto.TelemetryResponse
 import com.leafon.telemetry.mapper.toResponse
 import com.leafon.telemetry.service.TelemetryService
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -20,12 +25,22 @@ import java.util.UUID
 
 @RestController
 @RequestMapping("/telemetry")
+@Tag(name = "Telemetria", description = "Registro e consulta de leituras dos smart pots.")
+@SecurityRequirement(name = "bearerAuth")
 class TelemetryController(
     private val telemetryService: TelemetryService,
 ) {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Registrar leitura de telemetria")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "201", description = "Leitura registrada"),
+            ApiResponse(responseCode = "400", description = "Leitura invalida"),
+            ApiResponse(responseCode = "403", description = "Smart pot nao pertence ao usuario"),
+        ],
+    )
     fun create(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @RequestParam smartPotId: UUID,
@@ -33,8 +48,8 @@ class TelemetryController(
     ): TelemetryResponse =
         telemetryService.create(smartPotId, request, authenticatedUserId(uid)).toResponse()
 
-    //Params http://localhost:8080/telemetry?smartPotId=273f9192-d2c1-467d-9855-3f0e502e9f42
     @GetMapping
+    @Operation(summary = "Listar leituras de um smart pot")
     fun findAll(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @RequestParam smartPotId: UUID,
@@ -42,6 +57,7 @@ class TelemetryController(
         telemetryService.findAll(smartPotId, authenticatedUserId(uid)).map { it.toResponse() }
 
     @GetMapping("/latest")
+    @Operation(summary = "Buscar ultima leitura de um smart pot")
     fun findLatest(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @RequestParam smartPotId: UUID,

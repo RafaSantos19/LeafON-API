@@ -82,7 +82,13 @@ class SecurityConfig {
             .authorizeHttpRequests {
                 it
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/auth/**", "/health").permitAll()
+                    .requestMatchers(
+                        "/auth/**",
+                        "/health",
+                        "/swagger-ui/**",
+                        "/v3/api-docs/**",
+                        "/swagger-ui.html",
+                    ).permitAll()
                     .anyRequest().authenticated()
             }
             .oauth2ResourceServer {
