@@ -16,12 +16,6 @@ java {
 	}
 }
 
-configurations {
-	compileOnly {
-		extendsFrom(configurations.annotationProcessor.get())
-	}
-}
-
 repositories {
 	mavenCentral()
 }
@@ -35,19 +29,15 @@ dependencies {
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-	implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
-	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+	implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
 
-	compileOnly("org.projectlombok:lombok")
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
 	runtimeOnly("org.postgresql:postgresql")
-	annotationProcessor("org.projectlombok:lombok")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
-	testImplementation("io.projectreactor:reactor-test")
 	testImplementation("org.springframework.security:spring-security-test")
 	testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-	testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 	testImplementation("org.mockito.kotlin:mockito-kotlin:6.1.0")
+	testRuntimeOnly("com.h2database:h2")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

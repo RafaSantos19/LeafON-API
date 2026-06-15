@@ -39,3 +39,13 @@ out/
 ### Kotlin ###
 .kotlin
 
+### Local configuration and secrets ###
+.env
+.env.*
+!.env.example
+application-local.properties
+system-tests.local.ps1
+
+### Generated reports ###
+src/test/kotlin/test-reports.html
+

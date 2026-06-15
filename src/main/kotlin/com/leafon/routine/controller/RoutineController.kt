@@ -1,7 +1,7 @@
 package com.leafon.routine.controller
 
+import com.leafon.auth.security.toAuthenticatedUserId
 import com.leafon.common.config.SecurityConfig
-import com.leafon.common.exception.UnauthorizedException
 import com.leafon.routine.dto.RoutineCreateRequest
 import com.leafon.routine.dto.RoutineResponse
 import com.leafon.routine.dto.RoutineUpdateRequest
@@ -40,14 +40,14 @@ class RoutineController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: RoutineCreateRequest,
     ): RoutineResponse =
-        routineService.create(request, authenticatedUserId(uid)).toResponse()
+        routineService.create(request, uid.toAuthenticatedUserId()).toResponse()
 
     @GetMapping
     @Operation(summary = "Listar rotinas")
     fun findAll(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): List<RoutineResponse> =
-        routineService.findAll(authenticatedUserId(uid)).map { it.toResponse() }
+        routineService.findAll(uid.toAuthenticatedUserId()).map { it.toResponse() }
 
     @GetMapping("/{id}")
     @Operation(summary = "Buscar rotina por ID")
@@ -55,7 +55,7 @@ class RoutineController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): RoutineResponse =
-        routineService.findById(id, authenticatedUserId(uid)).toResponse()
+        routineService.findById(id, uid.toAuthenticatedUserId()).toResponse()
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar rotina")
@@ -64,7 +64,7 @@ class RoutineController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: RoutineUpdateRequest,
     ): RoutineResponse =
-        routineService.update(id, request, authenticatedUserId(uid)).toResponse()
+        routineService.update(id, request, uid.toAuthenticatedUserId()).toResponse()
 
     @PatchMapping("/{id}/activate")
     @Operation(summary = "Ativar rotina")
@@ -72,7 +72,7 @@ class RoutineController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): RoutineResponse =
-        routineService.activate(id, authenticatedUserId(uid)).toResponse()
+        routineService.activate(id, uid.toAuthenticatedUserId()).toResponse()
 
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Desativar rotina")
@@ -80,7 +80,7 @@ class RoutineController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): RoutineResponse =
-        routineService.deactivate(id, authenticatedUserId(uid)).toResponse()
+        routineService.deactivate(id, uid.toAuthenticatedUserId()).toResponse()
 
     @PatchMapping("/{id}/simulate-execution")
     @Operation(summary = "Simular execucao da rotina")
@@ -88,7 +88,7 @@ class RoutineController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): RoutineResponse =
-        routineService.simulateExecution(id, authenticatedUserId(uid)).toResponse()
+        routineService.simulateExecution(id, uid.toAuthenticatedUserId()).toResponse()
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -97,10 +97,6 @@ class RoutineController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ) {
-        routineService.delete(id, authenticatedUserId(uid))
+        routineService.delete(id, uid.toAuthenticatedUserId())
     }
-
-    private fun authenticatedUserId(uid: String): UUID =
-        runCatching { UUID.fromString(uid.trim()) }
-            .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
 }

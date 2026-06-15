@@ -1,6 +1,8 @@
 package com.leafon.user.controller
 
+import com.leafon.auth.security.BearerTokenExtractor
 import com.leafon.common.config.SecurityConfig
+import com.leafon.common.exception.UnauthorizedException
 import com.leafon.user.dto.CreateUserRequest
 import com.leafon.user.dto.UpdateUserRequest
 import com.leafon.user.dto.UserResponse
@@ -9,9 +11,11 @@ import com.leafon.user.service.UserService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import jakarta.servlet.http.HttpServletRequest
 import jakarta.validation.Valid
-import org.slf4j.LoggerFactory
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
+import org.springframework.security.oauth2.jwt.JwtDecoder
 import org.springframework.web.bind.annotation.*
 import java.util.UUID
 
@@ -21,9 +25,8 @@ import java.util.UUID
 @SecurityRequirement(name = "bearerAuth")
 class UserController(
     private val userService: UserService,
+    private val jwtDecoder: JwtDecoder,
 ) {
-    private val logger = LoggerFactory.getLogger(UserController::class.java)
-
     @GetMapping
     @Operation(summary = "Listar usuarios")
     fun findAll(): List<UserResponse> {
@@ -33,21 +36,9 @@ class UserController(
     @GetMapping("/me")
     @Operation(summary = "Buscar perfil do usuario autenticado")
     fun findCurrentUser(
-        @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
-    ): UserResponse {
-        logger.info("Temporary users/me GET received with authenticatedUid={}", uid)
-
-        val user = userService.findCurrentUser(uid)
-
-        logger.info(
-            "Temporary users/me GET resolved authenticatedUid={} to localUserId={} email={}",
-            uid,
-            user.id,
-            user.email,
-        )
-
-        return user.toResponse()
-    }
+        servletRequest: HttpServletRequest,
+    ): UserResponse =
+        userService.findCurrentUser(authenticatedUid(servletRequest)).toResponse()
 
     @GetMapping("/{id}")
     @Operation(summary = "Buscar usuario por ID")
@@ -71,28 +62,10 @@ class UserController(
     @PutMapping("/me")
     @Operation(summary = "Atualizar perfil do usuario autenticado")
     fun updateCurrentUser(
-        @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
+        servletRequest: HttpServletRequest,
         @Valid @RequestBody request: UpdateUserRequest,
-    ): UserResponse {
-        logger.info(
-            "Temporary users/me PUT received with authenticatedUid={} payload={emailPresent={}, namePresent={}, phonePresent={}}",
-            uid,
-            request.email != null,
-            request.name != null,
-            request.phone != null,
-        )
-
-        val user = userService.updateCurrentUser(uid, request)
-
-        logger.info(
-            "Temporary users/me PUT updated authenticatedUid={} localUserId={} email={}",
-            uid,
-            user.id,
-            user.email,
-        )
-
-        return user.toResponse()
-    }
+    ): UserResponse =
+        userService.updateCurrentUser(authenticatedUid(servletRequest), request).toResponse()
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar usuario por ID")
@@ -108,9 +81,9 @@ class UserController(
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Excluir perfil do usuario autenticado")
     fun deleteCurrentUser(
-        @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
+        servletRequest: HttpServletRequest,
     ) {
-        userService.deleteCurrentUser(uid)
+        userService.deleteCurrentUser(authenticatedUid(servletRequest))
     }
 
     @DeleteMapping("/{id}")
@@ -121,5 +94,18 @@ class UserController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ) {
         userService.deleteOwnedUser(id, uid)
+    }
+
+    private fun authenticatedUid(request: HttpServletRequest): String {
+        request.getAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE)
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+
+        val token = BearerTokenExtractor.extract(request.getHeader(HttpHeaders.AUTHORIZATION))
+            ?: throw UnauthorizedException("Authorization Bearer token is required")
+
+        return jwtDecoder.decode(token).subject
+            ?: throw UnauthorizedException("JWT subject is missing")
     }
 }

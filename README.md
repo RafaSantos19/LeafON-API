@@ -39,7 +39,6 @@ Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autent
 |   |   |           |-- alert/
 |   |   |           |-- auth/
 |   |   |           |-- common/
-|   |   |           |-- irrigation/
 |   |   |           |-- routine/
 |   |   |           |-- smartpot/
 |   |   |           |-- telemetry/
@@ -58,7 +57,7 @@ Pacotes principais:
 - `auth`: autenticacao e integracao com JWT do Supabase.
 - `user`: CRUD de usuarios.
 - `smartpot`: cadastro e ownership dos vasos.
-- `routine`: configuracao logica de rotinas de irrigacao e luminosidade.
+- `routine`: cadastro e simulacao logica de rotinas de irrigacao e luminosidade.
 - `telemetry`: registro e consulta de leituras.
 - `alert`: alertas gerados a partir da telemetria.
 - `common`: seguranca, excecoes e configuracoes compartilhadas.
@@ -76,7 +75,7 @@ Padrao interno dos dominios:
 
 - JDK 21
 - PostgreSQL acessivel pela aplicacao
-- Variavel `SUPABASE_DATABASE_PASSWORD` configurada quando o `application.properties` usa placeholder
+- Variaveis de banco e JWT configuradas no ambiente
 
 O projeto usa Gradle Wrapper, entao nao precisa de instalacao manual do Gradle.
 
@@ -93,13 +92,21 @@ Exemplo de variavel de ambiente:
 Windows PowerShell:
 
 ```powershell
+$env:DATABASE_URL="jdbc:postgresql://localhost:5432/leafon"
+$env:DATABASE_USERNAME="postgres"
 $env:SUPABASE_DATABASE_PASSWORD="sua_senha"
+$env:SUPABASE_JWT_ISSUER_URI="https://SEU_PROJETO.supabase.co/auth/v1"
+$env:SUPABASE_JWK_SET_URI="https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json"
 ```
 
 Linux/macOS:
 
 ```bash
+export DATABASE_URL="jdbc:postgresql://localhost:5432/leafon"
+export DATABASE_USERNAME="postgres"
 export SUPABASE_DATABASE_PASSWORD="sua_senha"
+export SUPABASE_JWT_ISSUER_URI="https://SEU_PROJETO.supabase.co/auth/v1"
+export SUPABASE_JWK_SET_URI="https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json"
 ```
 
 Exemplo minimo de configuracao para desenvolvimento:
@@ -107,17 +114,14 @@ Exemplo minimo de configuracao para desenvolvimento:
 ```properties
 spring.application.name=leafon-api
 
-spring.datasource.url=jdbc:postgresql://localhost:5432/leafon
-spring.datasource.username=postgres
+spring.datasource.url=${DATABASE_URL:jdbc:postgresql://aws-0-us-west-2.pooler.supabase.com:5432/postgres?sslmode=require}
+spring.datasource.username=${DATABASE_USERNAME:postgres.cieqfhwerpxomfvelojq}
 spring.datasource.password=${SUPABASE_DATABASE_PASSWORD:}
-spring.datasource.driverClassName=org.postgresql.Driver
+spring.datasource.driver-class-name=org.postgresql.Driver
 
-leafon.security.supabase.jwt.issuer-uri=https://SEU_PROJETO.supabase.co/auth/v1
-leafon.security.supabase.jwt.jwk-set-uri=https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json
-leafon.security.supabase.jwt.audience=authenticated
-leafon.supabase.admin.project-url=https://SEU_PROJETO.supabase.co
-leafon.supabase.admin.service-role-key=${SUPABASE_SERVICE_ROLE_KEY:}
-leafon.supabase.admin.email-confirm=true
+leafon.security.supabase.jwt.issuer-uri=${SUPABASE_JWT_ISSUER_URI:https://cieqfhwerpxomfvelojq.supabase.co/auth/v1}
+leafon.security.supabase.jwt.jwk-set-uri=${SUPABASE_JWK_SET_URI:https://cieqfhwerpxomfvelojq.supabase.co/auth/v1/.well-known/jwks.json}
+leafon.security.supabase.jwt.audience=${SUPABASE_JWT_AUDIENCE:authenticated}
 ```
 
 Observacoes importantes:
@@ -183,7 +187,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_readings_smart_pot_read_at
 
 A entidade `Routine` esta mapeada para a tabela `routines`.
 
-No MVP atual, a rotina e apenas uma configuracao logica do sistema. Nao ha scheduler automatico nem acionamento real de hardware.
+No MVP atual, a rotina e apenas uma configuracao logica do sistema. O backend permite cadastrar, consultar, alterar, ativar, desativar e simular a execucao de uma rotina. Nao ha scheduler automatico, comunicacao MQTT nem acionamento real de bomba, iluminacao ou outro hardware.
 
 ```sql
 CREATE TABLE IF NOT EXISTS routines (
@@ -278,6 +282,17 @@ java -jar build/libs/leafon-api-0.0.1-SNAPSHOT.jar
 ```
 
 Em Linux/macOS, substitua `.\gradlew.bat` por `./gradlew`.
+
+Os testes automatizados usam H2 em memoria e nao exigem credenciais externas.
+
+Para executar `system-tests-telemetry.ps1`, configure dados validos no ambiente:
+
+```powershell
+$env:LEAFON_TEST_TOKEN="jwt_valido"
+$env:LEAFON_TEST_SMART_POT_ID="uuid_do_smart_pot"
+$env:LEAFON_TEST_OTHER_USER_SMART_POT_ID="uuid_de_outro_usuario"
+.\system-tests-telemetry.ps1
+```
 
 ## Endpoints
 
@@ -538,3 +553,7 @@ curl -X PATCH http://localhost:8080/alerts/0f6b5c77-84c4-4ad5-8b69-8a87d9f7d2e1/
 - Frontend: https://github.com/RafaSantos19/LeafON-KMP
 - Backend: https://github.com/RafaSantos19/LeafON-API
 - Documento parcial do projeto: https://docs.google.com/document/d/1GGbEGgVE6KhAxyz87omWVD5X1HY0fGU79IRKmRMV-Ec/edit?usp=sharing
+
+## Simulacao MQTT
+
+O backend possui ingestao de telemetria por MQTT, desativavel por configuracao e reutilizando o dominio existente. Consulte [MQTT_SIMULATION.md](MQTT_SIMULATION.md) para subir o broker local, publicar uma leitura simulada e verificar a persistencia.

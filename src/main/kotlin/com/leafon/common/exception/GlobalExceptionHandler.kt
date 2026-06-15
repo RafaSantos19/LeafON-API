@@ -17,16 +17,6 @@ import java.time.Instant
 class GlobalExceptionHandler {
     private val logger = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
-    @ExceptionHandler(ExternalServiceException::class)
-    @ResponseStatus(HttpStatus.BAD_GATEWAY)
-    fun handleExternalService(ex: ExternalServiceException): Map<String, Any> =
-        mapOf(
-            "timestamp" to Instant.now().toString(),
-            "status" to 502,
-            "error" to "Bad Gateway",
-            "message" to ex.message.orEmpty(),
-        )
-
     @ExceptionHandler(UnauthorizedException::class)
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     fun handleUnauthorized(ex: UnauthorizedException): Map<String, Any> =

@@ -1,7 +1,7 @@
 package com.leafon.telemetry.controller
 
+import com.leafon.auth.security.toAuthenticatedUserId
 import com.leafon.common.config.SecurityConfig
-import com.leafon.common.exception.UnauthorizedException
 import com.leafon.telemetry.dto.TelemetryCreateRequest
 import com.leafon.telemetry.dto.TelemetryResponse
 import com.leafon.telemetry.mapper.toResponse
@@ -46,7 +46,7 @@ class TelemetryController(
         @RequestParam smartPotId: UUID,
         @Valid @RequestBody request: TelemetryCreateRequest,
     ): TelemetryResponse =
-        telemetryService.create(smartPotId, request, authenticatedUserId(uid)).toResponse()
+        telemetryService.create(smartPotId, request, uid.toAuthenticatedUserId()).toResponse()
 
     @GetMapping
     @Operation(summary = "Listar leituras de um smart pot")
@@ -54,7 +54,7 @@ class TelemetryController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @RequestParam smartPotId: UUID,
     ): List<TelemetryResponse> =
-        telemetryService.findAll(smartPotId, authenticatedUserId(uid)).map { it.toResponse() }
+        telemetryService.findAll(smartPotId, uid.toAuthenticatedUserId()).map { it.toResponse() }
 
     @GetMapping("/latest")
     @Operation(summary = "Buscar ultima leitura de um smart pot")
@@ -62,9 +62,5 @@ class TelemetryController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @RequestParam smartPotId: UUID,
     ): TelemetryResponse =
-        telemetryService.findLatest(smartPotId, authenticatedUserId(uid)).toResponse()
-
-    private fun authenticatedUserId(uid: String): UUID =
-        runCatching { UUID.fromString(uid.trim()) }
-            .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
+        telemetryService.findLatest(smartPotId, uid.toAuthenticatedUserId()).toResponse()
 }

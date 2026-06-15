@@ -1,7 +1,7 @@
 package com.leafon.smartpot.controller
 
+import com.leafon.auth.security.toAuthenticatedUserId
 import com.leafon.common.config.SecurityConfig
-import com.leafon.common.exception.UnauthorizedException
 import com.leafon.smartpot.dto.SmartPotCreateRequest
 import com.leafon.smartpot.dto.SmartPotResponse
 import com.leafon.smartpot.dto.SmartPotUpdateRequest
@@ -48,14 +48,14 @@ class SmartPotController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: SmartPotCreateRequest,
     ): SmartPotResponse =
-        smartPotService.create(request, authenticatedUserId(uid)).toResponse()
+        smartPotService.create(request, uid.toAuthenticatedUserId()).toResponse()
 
     @GetMapping
     @Operation(summary = "Listar smart pots")
     fun findAll(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): List<SmartPotResponse> =
-        smartPotService.findAll(authenticatedUserId(uid)).map { it.toResponse() }
+        smartPotService.findAll(uid.toAuthenticatedUserId()).map { it.toResponse() }
 
     @GetMapping("/{id}")
     @Operation(summary = "Buscar smart pot por ID")
@@ -63,7 +63,7 @@ class SmartPotController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): SmartPotResponse =
-        smartPotService.findById(id, authenticatedUserId(uid)).toResponse()
+        smartPotService.findById(id, uid.toAuthenticatedUserId()).toResponse()
 
     @PutMapping("/{id}")
     @Operation(summary = "Atualizar smart pot")
@@ -72,7 +72,7 @@ class SmartPotController(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
         @Valid @RequestBody request: SmartPotUpdateRequest,
     ): SmartPotResponse =
-        smartPotService.update(id, request, authenticatedUserId(uid)).toResponse()
+        smartPotService.update(id, request, uid.toAuthenticatedUserId()).toResponse()
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
@@ -81,10 +81,6 @@ class SmartPotController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ) {
-        smartPotService.delete(id, authenticatedUserId(uid))
+        smartPotService.delete(id, uid.toAuthenticatedUserId())
     }
-
-    private fun authenticatedUserId(uid: String): UUID =
-        runCatching { UUID.fromString(uid.trim()) }
-            .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
 }

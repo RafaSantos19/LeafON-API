@@ -1,5 +1,6 @@
 package com.leafon.user.service
 
+import com.leafon.auth.security.toAuthenticatedUserId
 import com.leafon.common.exception.ConflictException
 import com.leafon.common.exception.ForbiddenException
 import com.leafon.common.exception.NotFoundException
@@ -8,7 +9,6 @@ import com.leafon.user.dto.CreateUserRequest
 import com.leafon.user.dto.UpdateUserRequest
 import com.leafon.user.entity.User
 import com.leafon.user.repository.UserRepository
-import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -17,29 +17,15 @@ import java.util.UUID
 class UserService(
     private val userRepository: UserRepository
 ) {
-    private val logger = LoggerFactory.getLogger(UserService::class.java)
-
+    @Transactional
     fun createAuthenticated(
         authenticatedUid: String,
         request: CreateUserRequest,
-    ): User = createFromAuth(
-        authenticatedUid = authenticatedUid,
-        email = request.email,
-        name = request.name,
-        phone = request.phone,
-    )
-
-    @Transactional
-    fun createFromAuth(
-        authenticatedUid: String,
-        email: String,
-        name: String?,
-        phone: String? = null,
     ): User {
         val authenticatedUserId = authenticatedUserId(authenticatedUid)
-        val normalizedEmail = email.normalizedEmail()
-        val normalizedName = name?.trim()?.takeIf { it.isNotBlank() }
-        val normalizedPhone = phone?.normalizedPhone()
+        val normalizedEmail = request.email.normalizedEmail()
+        val normalizedName = request.name?.trim()?.takeIf { it.isNotBlank() }
+        val normalizedPhone = request.phone?.normalizedPhone()
 
         if (userRepository.existsById(authenticatedUserId)) {
             throw ConflictException("Authenticated user is already linked to a local user")
@@ -59,88 +45,19 @@ class UserService(
         )
     }
 
-    @Transactional
-    fun syncWithAuthIdentity(
-        authenticatedUid: String,
-        email: String?,
-        name: String?,
-        phone: String? = null,
-    ): User {
-        val authenticatedUserId = authenticatedUserId(authenticatedUid)
-        val normalizedEmail = email?.normalizedEmail()
-        val normalizedName = name?.trim()?.takeIf { it.isNotBlank() }
-        val normalizedPhone = phone?.normalizedPhone()
-        val existingUser = userRepository.findById(authenticatedUserId).orElse(null)
-
-        normalizedEmail?.let { ensureEmailIsAvailable(it, authenticatedUserId) }
-
-        if (existingUser == null && normalizedEmail == null) {
-            throw ConflictException("Authenticated user email is required to create a local user")
-        }
-
-        val user = existingUser ?: User(
-            id = authenticatedUserId,
-            email = normalizedEmail,
-            name = normalizedName,
-            phone = normalizedPhone,
-        )
-
-        var changed = existingUser == null
-
-        if (normalizedEmail != null && user.email != normalizedEmail) {
-            ensureEmailIsAvailable(normalizedEmail, user.id)
-            user.email = normalizedEmail
-            changed = true
-        }
-
-        if (!normalizedName.isNullOrBlank() && user.name.isNullOrBlank()) {
-            user.name = normalizedName
-            changed = true
-        }
-
-        if (!normalizedPhone.isNullOrBlank() && user.phone != normalizedPhone) {
-            user.phone = normalizedPhone
-            changed = true
-        }
-
-        return if (changed) userRepository.save(user) else user
-    }
-
     fun findById(id: UUID): User {
         return userRepository.findById(id)
             .orElseThrow { NotFoundException("User with id $id not found") }
     }
 
-    fun findCurrentUser(authenticatedUid: String): User {
-        val authenticatedUserId = authenticatedUserId(authenticatedUid)
-        logger.info(
-            "Temporary users/me service lookup started for authenticatedUid={} parsedUserId={}",
-            authenticatedUid,
-            authenticatedUserId,
-        )
-
-        val user = findById(authenticatedUserId)
-
-        logger.info(
-            "Temporary users/me service lookup succeeded for authenticatedUid={} localUserId={} email={}",
-            authenticatedUid,
-            user.id,
-            user.email,
-        )
-
-        return user
-    }
+    fun findCurrentUser(authenticatedUid: String): User =
+        findByAuthenticatedIdentity(authenticatedUid)
 
     fun findOwnedById(
         id: UUID,
         authenticatedUid: String,
     ): User =
         findById(id).also { ensureOwnership(it, authenticatedUid) }
-
-    fun findByEmail(email: String): User {
-        return userRepository.findByEmail(email.normalizedEmail())
-            ?: throw NotFoundException("User with email $email not found")
-    }
 
     fun findAll(): List<User> {
         return userRepository.findAll()
@@ -149,32 +66,8 @@ class UserService(
     fun updateCurrentUser(
         authenticatedUid: String,
         request: UpdateUserRequest,
-    ): User {
-        val existingUser = findCurrentUser(authenticatedUid)
-
-        logger.info(
-            "Temporary users/me service update started for authenticatedUid={} localUserId={} currentEmail={} requestedEmailPresent={} requestedNamePresent={} requestedPhonePresent={}",
-            authenticatedUid,
-            existingUser.id,
-            existingUser.email,
-            request.email != null,
-            request.name != null,
-            request.phone != null,
-        )
-
-        val updatedUser = update(existingUser, request)
-
-        logger.info(
-            "Temporary users/me service update finished for authenticatedUid={} localUserId={} newEmail={} newName={} newPhone={}",
-            authenticatedUid,
-            updatedUser.id,
-            updatedUser.email,
-            updatedUser.name,
-            updatedUser.phone,
-        )
-
-        return updatedUser
-    }
+    ): User =
+        update(findCurrentUser(authenticatedUid), request)
 
     fun updateOwnedUser(
         id: UUID,
@@ -226,22 +119,16 @@ class UserService(
         }
     }
 
-    private fun ensureEmailIsAvailable(
-        email: String,
-        currentUserId: UUID?,
-    ) {
-        val userWithEmail = userRepository.findByEmail(email) ?: return
-        if (userWithEmail.id != currentUserId) {
-            throw ConflictException("Email $email is already linked to another user")
-        }
-    }
-
     private fun authenticatedUserId(uid: String): UUID =
-        runCatching { UUID.fromString(uid.trim()) }
-            .onFailure {
-                logger.warn("Temporary users/me failed to parse authenticatedUid={}", uid)
-            }
-            .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
+        uid.toAuthenticatedUserId()
+
+    private fun findByAuthenticatedIdentity(identity: String): User {
+        runCatching { return findById(identity.toAuthenticatedUserId()) }
+
+        val email = identity.normalizedEmail()
+        return userRepository.findByEmail(email)
+            ?: throw UnauthorizedException("Authenticated identity is not linked to a local user")
+    }
 
     private fun String.normalizedPhone(): String =
         trim()

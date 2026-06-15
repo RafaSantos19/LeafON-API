@@ -32,7 +32,26 @@ class TelemetryService(
     ): TelemetryReading {
         validate(request)
         val smartPot = findAccessibleSmartPot(smartPotId, authenticatedUserId)
+        return persist(smartPot, request, Instant.now())
+    }
 
+    @Transactional
+    fun createFromDevice(
+        smartPotId: UUID,
+        request: TelemetryCreateRequest,
+        readAt: Instant?,
+    ): TelemetryReading {
+        validate(request)
+        val smartPot = smartPotRepository.findById(smartPotId)
+            .orElseThrow { SmartPotNotFoundException(smartPotId) }
+        return persist(smartPot, request, readAt ?: Instant.now())
+    }
+
+    private fun persist(
+        smartPot: SmartPot,
+        request: TelemetryCreateRequest,
+        readAt: Instant,
+    ): TelemetryReading {
         val telemetryReading = telemetryRepository.save(
             TelemetryReading(
                 smartPot = smartPot,
@@ -40,7 +59,7 @@ class TelemetryService(
                 airHumidity = request.airHumidity,
                 temperature = request.temperature,
                 luminosity = request.luminosityStatus,
-                readAt = Instant.now(),
+                readAt = readAt,
             ),
         )
 
@@ -56,6 +75,7 @@ class TelemetryService(
         }
     }
 
+    @Transactional(readOnly = true)
     fun findAll(
         smartPotId: UUID,
         authenticatedUserId: UUID,
@@ -64,6 +84,7 @@ class TelemetryService(
         return telemetryRepository.findAllBySmartPotIdOrderByReadAtDesc(smartPotId)
     }
 
+    @Transactional(readOnly = true)
     fun findLatest(
         smartPotId: UUID,
         authenticatedUserId: UUID,

@@ -3,8 +3,8 @@ package com.leafon.alert.controller
 import com.leafon.alert.dto.AlertResponse
 import com.leafon.alert.mapper.toResponse
 import com.leafon.alert.service.AlertService
+import com.leafon.auth.security.toAuthenticatedUserId
 import com.leafon.common.config.SecurityConfig
-import com.leafon.common.exception.UnauthorizedException
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -29,14 +29,14 @@ class AlertController(
     fun findAll(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): List<AlertResponse> =
-        alertService.findAll(authenticatedUserId(uid)).map { it.toResponse() }
+        alertService.findAll(uid.toAuthenticatedUserId()).map { it.toResponse() }
 
     @GetMapping("/unread")
     @Operation(summary = "Listar alertas nao lidos")
     fun findUnread(
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): List<AlertResponse> =
-        alertService.findUnread(authenticatedUserId(uid)).map { it.toResponse() }
+        alertService.findUnread(uid.toAuthenticatedUserId()).map { it.toResponse() }
 
     @PatchMapping("/{id}/read")
     @Operation(summary = "Marcar alerta como lido")
@@ -44,9 +44,5 @@ class AlertController(
         @PathVariable id: UUID,
         @RequestAttribute(SecurityConfig.AUTHENTICATED_UID_ATTRIBUTE) uid: String,
     ): AlertResponse =
-        alertService.markAsRead(id, authenticatedUserId(uid)).toResponse()
-
-    private fun authenticatedUserId(uid: String): UUID =
-        runCatching { UUID.fromString(uid.trim()) }
-            .getOrElse { throw UnauthorizedException("Authenticated UID is not a valid UUID") }
+        alertService.markAsRead(id, uid.toAuthenticatedUserId()).toResponse()
 }

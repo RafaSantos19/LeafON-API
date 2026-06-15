@@ -34,7 +34,6 @@ import kotlin.test.assertSame
 @ExtendWith(MockitoExtension::class)
 class TelemetryServiceTest {
 
-    // Collaborators are mocked so each test exercises only TelemetryService business rules.
     @Mock
     private lateinit var telemetryRepository: TelemetryRepository
 
@@ -98,6 +97,23 @@ class TelemetryServiceTest {
         verify(alertService).createLowSoilHumidityAlert(eq(smartPot), eq(result))
         verify(alertService, never()).createLowAirHumidityAlert(any(), any())
         verify(alertService, never()).createHighTemperatureAlert(any(), any())
+    }
+
+    @Test
+    fun `deve registrar leitura MQTT com horario informado pelo dispositivo`() {
+        val readAt = Instant.parse("2026-05-30T12:00:00Z")
+        givenAccessibleSmartPot()
+        givenRepositoryReturnsSavedReading()
+
+        service.createFromDevice(
+            smartPotId = smartPotId,
+            request = validRequest(),
+            readAt = readAt,
+        )
+
+        verify(telemetryRepository).save(readingCaptor.capture())
+        assertEquals(readAt, readingCaptor.value.readAt)
+        assertEquals(smartPot, readingCaptor.value.smartPot)
     }
 
     @Test

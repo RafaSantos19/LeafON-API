@@ -1,11 +1,11 @@
 package com.leafon.common.config
 
 import com.leafon.auth.security.AuthenticatedUser
+import com.leafon.auth.security.BearerTokenExtractor
 import com.leafon.auth.security.SupabaseJwtConverter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cache.Cache
 import org.springframework.cache.concurrent.ConcurrentMapCache
@@ -21,10 +21,8 @@ import org.springframework.security.config.http.SessionCreationPolicy
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.oauth2.core.OAuth2AuthenticationException
 import org.springframework.security.oauth2.jose.jws.SignatureAlgorithm
-import org.springframework.security.oauth2.jwt.BadJwtException
 import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.security.oauth2.jwt.JwtDecoder
-import org.springframework.security.oauth2.jwt.JwtException
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver
@@ -39,24 +37,14 @@ import org.springframework.web.cors.CorsConfiguration
 import org.springframework.web.cors.CorsConfigurationSource
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource
 import org.springframework.web.filter.OncePerRequestFilter
-import org.springframework.web.context.request.RequestContextHolder
-import org.springframework.web.context.request.ServletRequestAttributes
-import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.time.Instant
-import java.util.Base64
 
 @Configuration
 @EnableMethodSecurity
 class SecurityConfig {
-    private val logger = LoggerFactory.getLogger(SecurityConfig::class.java)
-
     companion object {
         const val AUTHENTICATED_UID_ATTRIBUTE = "authenticatedUid"
-        private const val AUTHORIZATION_ATTRIBUTE = "leafon.security.receivedAuthorization"
-        private const val TOKEN_ATTRIBUTE = "leafon.security.receivedToken"
-        private const val AUTH_RESULT_ATTRIBUTE = "leafon.security.tokenDecodeResult"
-        private const val AUTH_RESULT_HEADER = "X-Token-Decode-Result"
     }
 
     @Bean
@@ -66,7 +54,6 @@ class SecurityConfig {
         authenticationEntryPoint: AuthenticationEntryPoint,
         bearerTokenResolver: BearerTokenResolver,
         accessDeniedHandler: AccessDeniedHandler,
-        authDebugFilter: OncePerRequestFilter,
         authenticatedUidFilter: OncePerRequestFilter,
         supabaseJwtConverter: SupabaseJwtConverter,
     ): SecurityFilterChain {
@@ -77,11 +64,13 @@ class SecurityConfig {
             .httpBasic { it.disable() }
             .logout { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
-            .addFilterBefore(authDebugFilter, BearerTokenAuthenticationFilter::class.java)
             .addFilterAfter(authenticatedUidFilter, BearerTokenAuthenticationFilter::class.java)
             .authorizeHttpRequests {
                 it
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/users/me").permitAll()
+                    .requestMatchers(HttpMethod.PUT, "/users/me").permitAll()
+                    .requestMatchers(HttpMethod.DELETE, "/users/me").permitAll()
                     .requestMatchers(
                         "/auth/**",
                         "/health",
@@ -124,7 +113,6 @@ class SecurityConfig {
                 HttpHeaders.ACCEPT,
                 HttpHeaders.ORIGIN,
             )
-            exposedHeaders = listOf(AUTH_RESULT_HEADER)
             allowCredentials = false
             maxAge = 3600
         }
@@ -147,9 +135,9 @@ class SecurityConfig {
 
             try {
                 delegate.resolve(request)
-                    ?: authorization.trim().takeIf(::looksLikeJwt)
+                    ?: BearerTokenExtractor.extract(authorization)
             } catch (_: OAuth2AuthenticationException) {
-                authorization.trim().takeIf(::looksLikeJwt)
+                BearerTokenExtractor.extract(authorization)
             }
         }
     }
@@ -159,25 +147,12 @@ class SecurityConfig {
         @Value("\${leafon.security.supabase.jwt.jwk-set-uri}") jwkSetUri: String,
         jwkRestOperations: RestOperations,
         jwkSetCache: Cache,
-    ): JwtDecoder {
-        val delegate = NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
+    ): JwtDecoder =
+        NimbusJwtDecoder.withJwkSetUri(jwkSetUri)
             .restOperations(jwkRestOperations)
             .cache(jwkSetCache)
             .jwsAlgorithm(SignatureAlgorithm.ES256)
             .build()
-
-        return JwtDecoder { token ->
-            try {
-                delegate.decode(token).also { jwt ->
-                    registerDecodeResult(buildDecodeSuccessMessage(jwt))
-                }
-            } catch (ex: JwtException) {
-                val message = buildDecodeFailureMessage(token, ex)
-                registerDecodeResult(message, exception = ex)
-                throw BadJwtException(message, ex)
-            }
-        }
-    }
 
     @Bean
     fun jwkRestOperations(): RestOperations =
@@ -192,111 +167,6 @@ class SecurityConfig {
     fun jwkSetCache(): Cache = ConcurrentMapCache("supabase-jwk-set")
 
     @Bean
-    fun authDebugFilter(
-        bearerTokenResolver: BearerTokenResolver,
-    ): OncePerRequestFilter =
-        object : OncePerRequestFilter() {
-            override fun doFilterInternal(
-                request: HttpServletRequest,
-                response: HttpServletResponse,
-                filterChain: FilterChain,
-            ) {
-                if (isUsersMeRequest(request)) {
-                    logger.info(
-                        "Temporary security users/me request received " +
-                            "method=${request.method} uri=${request.requestURI} " +
-                            "hasAuthorizationHeader=${!request.getHeader(HttpHeaders.AUTHORIZATION).isNullOrBlank()}",
-                    )
-                }
-
-                val authorization = request.getHeader(HttpHeaders.AUTHORIZATION)
-                request.setAttribute(AUTHORIZATION_ATTRIBUTE, authorization ?: "")
-
-                if (authorization.isNullOrBlank()) {
-                    storeAuthDebug(
-                        request = request,
-                        response = response,
-                        token = null,
-                        message = "Nenhum header Authorization foi recebido.",
-                        warnOnly = true,
-                    )
-                    if (isUsersMeRequest(request)) {
-                        logger.info("Temporary security users/me authDebugFilter before chain (missing authorization)")
-                    }
-                    filterChain.doFilter(request, response)
-                    if (isUsersMeRequest(request)) {
-                        logger.info(
-                            "Temporary security users/me authDebugFilter after chain " +
-                                "status=${response.status} committed=${response.isCommitted}",
-                        )
-                    }
-                    return
-                }
-
-                val token = try {
-                    bearerTokenResolver.resolve(request)
-                } catch (ex: OAuth2AuthenticationException) {
-                    storeAuthDebug(
-                        request = request,
-                        response = response,
-                        token = null,
-                        message = "Falha ao extrair Bearer token do header Authorization: ${ex.message ?: "formato invalido"}",
-                        exception = ex,
-                    )
-                    if (isUsersMeRequest(request)) {
-                        logger.info("Temporary security users/me authDebugFilter before chain (token extraction failure)")
-                    }
-                    filterChain.doFilter(request, response)
-                    if (isUsersMeRequest(request)) {
-                        logger.info(
-                            "Temporary security users/me authDebugFilter after chain " +
-                                "status=${response.status} committed=${response.isCommitted}",
-                        )
-                    }
-                    return
-                }
-
-                if (token.isNullOrBlank()) {
-                    storeAuthDebug(
-                        request = request,
-                        response = response,
-                        token = token,
-                        message = "O header Authorization foi recebido, mas nenhum token Bearer valido foi extraido.",
-                        warnOnly = true,
-                    )
-                    if (isUsersMeRequest(request)) {
-                        logger.info("Temporary security users/me authDebugFilter before chain (blank token)")
-                    }
-                    filterChain.doFilter(request, response)
-                    if (isUsersMeRequest(request)) {
-                        logger.info(
-                            "Temporary security users/me authDebugFilter after chain " +
-                                "status=${response.status} committed=${response.isCommitted}",
-                        )
-                    }
-                    return
-                }
-
-                if (isUsersMeRequest(request)) {
-                    logger.info(
-                        "Temporary security users/me bearer token resolved " +
-                            "method=${request.method} uri=${request.requestURI} tokenPreview=${token.take(16)}",
-                    )
-                    logger.info("Temporary security users/me authDebugFilter before chain")
-                }
-
-                filterChain.doFilter(request, response)
-
-                if (isUsersMeRequest(request)) {
-                    logger.info(
-                        "Temporary security users/me authDebugFilter after chain " +
-                            "status=${response.status} committed=${response.isCommitted}",
-                    )
-                }
-            }
-        }
-
-    @Bean
     fun authenticatedUidFilter(): OncePerRequestFilter =
         object : OncePerRequestFilter() {
             override fun doFilterInternal(
@@ -304,125 +174,34 @@ class SecurityConfig {
                 response: HttpServletResponse,
                 filterChain: FilterChain,
             ) {
-                val resolvedUid = resolveAuthenticatedUid()
-
-                if (isUsersMeRequest(request)) {
-                    logger.info(
-                        "Temporary security users/me authentication state " +
-                            "method=${request.method} uri=${request.requestURI} " +
-                            "resolvedUid=$resolvedUid " +
-                            "principalName=${SecurityContextHolder.getContext().authentication?.name} " +
-                            "authClass=${SecurityContextHolder.getContext().authentication?.javaClass?.simpleName}",
-                    )
-                }
-
-                resolvedUid?.let { uid ->
+                resolveAuthenticatedUid()?.let { uid ->
                     request.setAttribute(AUTHENTICATED_UID_ATTRIBUTE, uid)
                 }
-
-                if (isUsersMeRequest(request)) {
-                    logger.info("Temporary security users/me authenticatedUidFilter before chain")
-                }
-
                 filterChain.doFilter(request, response)
-
-                if (isUsersMeRequest(request)) {
-                    logger.info(
-                        "Temporary security users/me authenticatedUidFilter after chain " +
-                            "status=${response.status} committed=${response.isCommitted}",
-                    )
-                }
             }
         }
 
     @Bean
     fun authenticationEntryPoint(): AuthenticationEntryPoint =
-        AuthenticationEntryPoint { request, response, exception ->
-            writeUnauthorized(
-                request = request,
+        AuthenticationEntryPoint { _, response, _ ->
+            writeSecurityError(
                 response = response,
-                fallbackMessage = buildExceptionDetail(exception),
+                status = HttpServletResponse.SC_UNAUTHORIZED,
+                error = "Unauthorized",
+                message = "Authentication is required",
             )
         }
 
     @Bean
     fun accessDeniedHandler(): AccessDeniedHandler =
-        AccessDeniedHandler { request, response, exception ->
-            writeUnauthorized(
-                request = request,
+        AccessDeniedHandler { _, response, _ ->
+            writeSecurityError(
                 response = response,
-                fallbackMessage = buildExceptionDetail(exception),
+                status = HttpServletResponse.SC_FORBIDDEN,
+                error = "Forbidden",
+                message = "Access is denied",
             )
         }
-
-    private fun buildExceptionDetail(exception: Exception): String =
-        buildString {
-            append(exception::class.simpleName ?: "AuthenticationException")
-            exception.message
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-                    append(": ")
-                    append(it)
-                }
-            exception.cause?.message
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-                    append(" | cause: ")
-                        append(it)
-                }
-        }
-
-    private fun buildDecodeSuccessMessage(jwt: Jwt): String =
-        buildString {
-            append("Decode do token realizado com sucesso")
-            append(". sub=")
-            append(jwt.subject ?: "desconhecido")
-            jwt.issuer?.toString()
-                ?.takeIf { it.isNotBlank() }
-                ?.let {
-                    append(", iss=")
-                    append(it)
-                }
-            jwt.expiresAt
-                ?.let {
-                    append(", exp=")
-                    append(it)
-                }
-        }
-
-    private fun buildDecodeFailureMessage(
-        token: String,
-        ex: JwtException,
-    ): String =
-        buildString {
-            append("Falha ao decodificar token: ")
-            append(ex.message ?: ex::class.simpleName ?: "erro desconhecido")
-            decodeJwtParts(token)
-                ?.let {
-                    append(" | decode local=")
-                    append(it)
-                }
-        }
-
-    private fun decodeJwtParts(token: String): String? {
-        val parts = token.split('.')
-        if (parts.size != 3) {
-            return null
-        }
-
-        val header = decodeJwtSection(parts[0]) ?: return null
-        val payload = decodeJwtSection(parts[1]) ?: return null
-        return """{"header":${header.quoteForJson()},"payload":${payload.quoteForJson()}}"""
-    }
-
-    private fun decodeJwtSection(value: String): String? =
-        runCatching {
-            val normalized = value.padEnd(value.length + (4 - value.length % 4) % 4, '=')
-            String(Base64.getUrlDecoder().decode(normalized), StandardCharsets.UTF_8)
-        }.getOrNull()
-
-    private fun looksLikeJwt(value: String): Boolean =
-        value.count { it == '.' } == 2 && !value.contains(' ')
 
     private fun resolveAuthenticatedUid(): String? {
         val authentication = SecurityContextHolder.getContext().authentication
@@ -439,6 +218,9 @@ class SecurityConfig {
             authentication is JwtAuthenticationToken ->
                 authentication.token.subject
 
+            authentication.principal is Jwt ->
+                (authentication.principal as Jwt).subject
+
             authentication.name.isNotBlank() ->
                 authentication.name
 
@@ -446,78 +228,17 @@ class SecurityConfig {
         }
     }
 
-    private fun registerDecodeResult(
-        message: String,
-        exception: Exception? = null,
-    ) {
-        val request = currentRequest() ?: return
-        request.setAttribute(AUTH_RESULT_ATTRIBUTE, message)
-
-        if (exception != null) {
-            logger.warn(message, exception)
-        } else {
-            logger.info(message)
-        }
-    }
-
-    private fun storeAuthDebug(
-        request: HttpServletRequest,
+    private fun writeSecurityError(
         response: HttpServletResponse,
-        token: String?,
+        status: Int,
+        error: String,
         message: String,
-        warnOnly: Boolean = false,
-        exception: Exception? = null,
     ) {
-        request.setAttribute(TOKEN_ATTRIBUTE, token ?: "")
-        request.setAttribute(AUTH_RESULT_ATTRIBUTE, message)
-        response.setHeader(AUTH_RESULT_HEADER, message)
-
-        when {
-            exception != null -> logger.warn(message, exception)
-            warnOnly -> logger.warn(message)
-            else -> logger.info(message)
-        }
-    }
-
-    private fun currentRequest(): HttpServletRequest? =
-        (RequestContextHolder.getRequestAttributes() as? ServletRequestAttributes)?.request
-
-    private fun writeUnauthorized(
-        request: HttpServletRequest,
-        response: HttpServletResponse,
-        fallbackMessage: String,
-    ) {
-        val authorization = request.getAttribute(AUTHORIZATION_ATTRIBUTE)?.toString().orEmpty()
-        val token = request.getAttribute(TOKEN_ATTRIBUTE)?.toString().orEmpty()
-        val decodeResult = request.getAttribute(AUTH_RESULT_ATTRIBUTE)?.toString()
-            ?.takeIf { it.isNotBlank() }
-            ?: fallbackMessage
-
-        if (isUsersMeRequest(request)) {
-            logger.warn(
-                "Temporary security users/me unauthorized " +
-                    "method=${request.method} uri=${request.requestURI} " +
-                    "message=$decodeResult hasAuthorizationHeader=${authorization.isNotBlank()} " +
-                    "tokenPreview=${token.take(16)}",
-            )
-        }
-
-        response.status = HttpServletResponse.SC_UNAUTHORIZED
+        response.status = status
         response.contentType = MediaType.APPLICATION_JSON_VALUE
         response.characterEncoding = Charsets.UTF_8.name()
-        response.setHeader(AUTH_RESULT_HEADER, decodeResult)
         response.writer.write(
-            """
-            {"timestamp":"${Instant.now()}","status":401,"error":"Unauthorized","message":"${decodeResult.escapeJson()}","receivedAuthorization":"${authorization.escapeJson()}","receivedToken":"${token.escapeJson()}","decodeResult":"${decodeResult.escapeJson()}"}
-            """.trimIndent(),
+            """{"timestamp":"${Instant.now()}","status":$status,"error":"$error","message":"$message"}""",
         )
     }
-
-    private fun String.quoteForJson(): String = "\"${escapeJson()}\""
-
-    private fun isUsersMeRequest(request: HttpServletRequest): Boolean =
-        request.requestURI == "/users/me"
-
-    private fun String.escapeJson(): String =
-        replace("\\", "\\\\").replace("\"", "\\\"")
 }
