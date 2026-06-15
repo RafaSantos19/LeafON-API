@@ -1,11 +1,11 @@
 # LeafON API
 
-Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autenticacao via JWT, cadastro de usuarios, gerenciamento de smart pots, rotinas, registro de telemetria e consulta de alertas.
+Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autenticacao via JWT, cadastro de usuarios, gerenciamento de smart pots, rotinas, registro de telemetria, ingestao de telemetria por MQTT, consulta de alertas e documentacao interativa com Swagger/OpenAPI.
 
 ## Integrantes
 
-- Rafael Ferreira dos Santos
-- Miguel Gomes de Lima Coyado Vieira
+- Rafael Ferreira dos Santos - Responsável pelo Backend e o IoT da aplicação
+- Miguel Gomes de Lima Coyado Vieira - Responsável pelo Frontend, arte e design da aplicação
 
 ## Stack
 
@@ -17,6 +17,8 @@ Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autent
 - Spring Data JPA
 - Spring Security
 - Bean Validation
+- Springdoc OpenAPI / Swagger UI
+- Eclipse Paho MQTT
 - PostgreSQL
 - OAuth2 Resource Server com JWT
 
@@ -26,6 +28,10 @@ Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autent
 .
 |-- build.gradle.kts
 |-- settings.gradle.kts
+|-- docker-compose.mqtt.yml
+|-- docker/
+|   `-- mosquitto/
+|       `-- mosquitto.conf
 |-- gradlew
 |-- gradlew.bat
 |-- gradle/
@@ -58,7 +64,7 @@ Pacotes principais:
 - `user`: CRUD de usuarios.
 - `smartpot`: cadastro e ownership dos vasos.
 - `routine`: cadastro e simulacao logica de rotinas de irrigacao e luminosidade.
-- `telemetry`: registro e consulta de leituras.
+- `telemetry`: registro, consulta e ingestao MQTT de leituras.
 - `alert`: alertas gerados a partir da telemetria.
 - `common`: seguranca, excecoes e configuracoes compartilhadas.
 
@@ -76,6 +82,7 @@ Padrao interno dos dominios:
 - JDK 21
 - PostgreSQL acessivel pela aplicacao
 - Variaveis de banco e JWT configuradas no ambiente
+- Docker, opcionalmente, para subir um broker MQTT local com Mosquitto
 
 O projeto usa Gradle Wrapper, entao nao precisa de instalacao manual do Gradle.
 
@@ -97,6 +104,9 @@ $env:DATABASE_USERNAME="postgres"
 $env:SUPABASE_DATABASE_PASSWORD="sua_senha"
 $env:SUPABASE_JWT_ISSUER_URI="https://SEU_PROJETO.supabase.co/auth/v1"
 $env:SUPABASE_JWK_SET_URI="https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json"
+$env:MQTT_ENABLED="true"
+$env:MQTT_BROKER_URL="tcp://localhost:1883"
+$env:MQTT_TOPIC="leafon/telemetry"
 ```
 
 Linux/macOS:
@@ -107,6 +117,9 @@ export DATABASE_USERNAME="postgres"
 export SUPABASE_DATABASE_PASSWORD="sua_senha"
 export SUPABASE_JWT_ISSUER_URI="https://SEU_PROJETO.supabase.co/auth/v1"
 export SUPABASE_JWK_SET_URI="https://SEU_PROJETO.supabase.co/auth/v1/.well-known/jwks.json"
+export MQTT_ENABLED="true"
+export MQTT_BROKER_URL="tcp://localhost:1883"
+export MQTT_TOPIC="leafon/telemetry"
 ```
 
 Exemplo minimo de configuracao para desenvolvimento:
@@ -122,6 +135,13 @@ spring.datasource.driver-class-name=org.postgresql.Driver
 leafon.security.supabase.jwt.issuer-uri=${SUPABASE_JWT_ISSUER_URI:https://cieqfhwerpxomfvelojq.supabase.co/auth/v1}
 leafon.security.supabase.jwt.jwk-set-uri=${SUPABASE_JWK_SET_URI:https://cieqfhwerpxomfvelojq.supabase.co/auth/v1/.well-known/jwks.json}
 leafon.security.supabase.jwt.audience=${SUPABASE_JWT_AUDIENCE:authenticated}
+
+mqtt.enabled=${MQTT_ENABLED:true}
+mqtt.broker-url=${MQTT_BROKER_URL:tcp://localhost:1883}
+mqtt.client-id=${MQTT_CLIENT_ID:leafon-backend-listener}
+mqtt.topic=${MQTT_TOPIC:leafon/telemetry}
+mqtt.username=${MQTT_USERNAME:}
+mqtt.password=${MQTT_PASSWORD:}
 ```
 
 Observacoes importantes:
@@ -129,6 +149,8 @@ Observacoes importantes:
 - `issuer-uri`, `jwk-set-uri` e o JWT das requisicoes precisam pertencer ao mesmo projeto Supabase.
 - O projeto nao possui migracoes versionadas neste momento. As tabelas precisam existir no banco.
 - A tabela `smartpots` precisa usar `uuid` em `id` e `user_id`.
+- A ingestao MQTT fica ativa por padrao. Use `MQTT_ENABLED=false` se nao quiser conectar a um broker durante o desenvolvimento.
+- Se o broker MQTT estiver indisponivel, a aplicacao continua subindo e tenta reconectar periodicamente.
 
 ## Banco de dados
 
@@ -187,7 +209,7 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_readings_smart_pot_read_at
 
 A entidade `Routine` esta mapeada para a tabela `routines`.
 
-No MVP atual, a rotina e apenas uma configuracao logica do sistema. O backend permite cadastrar, consultar, alterar, ativar, desativar e simular a execucao de uma rotina. Nao ha scheduler automatico, comunicacao MQTT nem acionamento real de bomba, iluminacao ou outro hardware.
+No MVP atual, a rotina e apenas uma configuracao logica do sistema. O backend permite cadastrar, consultar, alterar, ativar, desativar e simular a execucao de uma rotina. Nao ha scheduler automatico nem acionamento real de bomba, iluminacao ou outro hardware. A integracao MQTT atual e usada para ingestao de telemetria.
 
 ```sql
 CREATE TABLE IF NOT EXISTS routines (
@@ -265,6 +287,18 @@ URL padrao:
 http://localhost:8080
 ```
 
+Swagger UI:
+
+```text
+http://localhost:8080/swagger-ui/index.html
+```
+
+Documento OpenAPI em JSON:
+
+```text
+http://localhost:8080/v3/api-docs
+```
+
 ## Comandos uteis
 
 ```powershell
@@ -293,6 +327,92 @@ $env:LEAFON_TEST_SMART_POT_ID="uuid_do_smart_pot"
 $env:LEAFON_TEST_OTHER_USER_SMART_POT_ID="uuid_de_outro_usuario"
 .\system-tests-telemetry.ps1
 ```
+
+## Swagger / OpenAPI
+
+A documentacao HTTP e exposta pelo Springdoc OpenAPI. As rotas do Swagger e do documento OpenAPI estao liberadas na configuracao de seguranca:
+
+```text
+GET /swagger-ui/**
+GET /swagger-ui.html
+GET /v3/api-docs/**
+```
+
+Os endpoints protegidos aparecem no Swagger com o esquema `bearerAuth`. Para testar rotas autenticadas pela interface, informe um JWT valido no botao de autorizacao do Swagger UI.
+
+## MQTT
+
+O backend assina o topico configurado em `mqtt.topic` e persiste leituras recebidas em JSON. A implementacao usa Eclipse Paho, QoS 1, reconexao automatica do client e uma tentativa agendada a cada 10 segundos quando o broker nao esta disponivel.
+
+A entrada MQTT nao usa JWT. Em ambientes fora de desenvolvimento, proteja o broker com rede privada, usuario/senha e politicas de publicacao adequadas. O `docker-compose.mqtt.yml` usa Mosquitto com acesso anonimo apenas para simulacao local.
+
+Configuracao padrao:
+
+| Propriedade | Variavel | Padrao |
+|---|---|---|
+| `mqtt.enabled` | `MQTT_ENABLED` | `true` |
+| `mqtt.broker-url` | `MQTT_BROKER_URL` | `tcp://localhost:1883` |
+| `mqtt.client-id` | `MQTT_CLIENT_ID` | `leafon-backend-listener` |
+| `mqtt.topic` | `MQTT_TOPIC` | `leafon/telemetry` |
+| `mqtt.username` | `MQTT_USERNAME` | vazio |
+| `mqtt.password` | `MQTT_PASSWORD` | vazio |
+
+Para subir um broker local com Mosquitto:
+
+```powershell
+docker compose -f docker-compose.mqtt.yml up -d
+```
+
+Para parar o broker:
+
+```powershell
+docker compose -f docker-compose.mqtt.yml down
+```
+
+Payload MQTT esperado:
+
+```json
+{
+  "smartPotId": "273f9192-d2c1-467d-9855-3f0e502e9f42",
+  "soilHumidity": 67,
+  "soilHumidityRaw": 352,
+  "airHumidity": 68.4,
+  "temperature": 24.5,
+  "luminosityStatus": "CLARO",
+  "luminosityDigital": 0,
+  "readAt": "2026-05-30T12:00:00Z"
+}
+```
+
+Campos obrigatorios para persistir uma leitura via MQTT:
+
+| Campo | Tipo | Regra |
+|---|---|---|
+| `smartPotId` | UUID | Deve existir na tabela `smartpots` |
+| `soilHumidity` | inteiro | Valor entre 0 e 100 |
+| `airHumidity` | decimal | Valor entre 0 e 100 |
+| `temperature` | decimal | Temperatura coletada pelo sensor |
+| `luminosityStatus` | texto | Aceita somente `CLARO` ou `ESCURO` |
+
+Campos opcionais:
+
+| Campo | Uso |
+|---|---|
+| `readAt` | Quando informado, e usado como horario da leitura. Quando ausente, o servidor usa o horario atual. |
+| `soilHumidityRaw` | Aceito no payload, mas nao persistido. |
+| `luminosityDigital` | Aceito no payload, mas nao persistido. |
+
+Exemplo de publicacao usando o container do Mosquitto:
+
+```powershell
+docker exec leafon-mosquitto mosquitto_pub -h localhost -p 1883 -t leafon/telemetry -m '{ "smartPotId": "273f9192-d2c1-467d-9855-3f0e502e9f42", "soilHumidity": 67, "airHumidity": 68.4, "temperature": 24.5, "luminosityStatus": "CLARO", "readAt": "2026-05-30T12:00:00Z" }'
+```
+
+A leitura MQTT reutiliza o mesmo dominio da telemetria HTTP, entao tambem pode gerar alertas automaticamente:
+
+- `soilHumidity` abaixo de `humidityMin`: `LOW_SOIL_HUMIDITY`
+- `airHumidity` abaixo de `40.0`: `LOW_AIR_HUMIDITY`
+- `temperature` acima de `35.0`: `HIGH_TEMPERATURE`
 
 ## Endpoints
 
@@ -553,7 +673,3 @@ curl -X PATCH http://localhost:8080/alerts/0f6b5c77-84c4-4ad5-8b69-8a87d9f7d2e1/
 - Frontend: https://github.com/RafaSantos19/LeafON-KMP
 - Backend: https://github.com/RafaSantos19/LeafON-API
 - Documento parcial do projeto: https://docs.google.com/document/d/1GGbEGgVE6KhAxyz87omWVD5X1HY0fGU79IRKmRMV-Ec/edit?usp=sharing
-
-## Simulacao MQTT
-
-O backend possui ingestao de telemetria por MQTT, desativavel por configuracao e reutilizando o dominio existente. Consulte [MQTT_SIMULATION.md](MQTT_SIMULATION.md) para subir o broker local, publicar uma leitura simulada e verificar a persistencia.
