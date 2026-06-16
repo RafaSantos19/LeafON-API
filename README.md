@@ -2,6 +2,8 @@
 
 Backend da LeafON desenvolvido em Kotlin com Spring Boot. A API concentra autenticacao via JWT, cadastro de usuarios, gerenciamento de smart pots, rotinas, registro de telemetria, ingestao de telemetria por MQTT, consulta de alertas e documentacao interativa com Swagger/OpenAPI.
 
+Video: https://youtu.be/Mqzp7iVovNs
+
 ## Integrantes
 
 - Rafael Ferreira dos Santos - Responsável pelo Backend e o IoT da aplicação
